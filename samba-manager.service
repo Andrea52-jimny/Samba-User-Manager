@@ -1,0 +1,22 @@
+[Unit]
+Description=Samba Permission Manager - Web App
+After=network.target smbd.service
+Wants=smbd.service
+
+[Service]
+Type=simple
+# Deve girare come root: esegue useradd/userdel/smbpasswd/setfacl/testparm
+User=root
+WorkingDirectory=/opt/samba-manager
+Environment="SM_COOKIE_SECURE=false"
+ExecStart=/opt/samba-manager/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
+
+# Hardening di base compatibile con l'uso di comandi di sistema privilegiati
+NoNewPrivileges=false
+ProtectSystem=false
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

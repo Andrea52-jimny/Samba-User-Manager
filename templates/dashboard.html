@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Samba Manager — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="sm-body min-h-screen">
+
+  <header class="sm-header flex items-center justify-between px-6 py-4">
+    <div class="flex items-center gap-3">
+      <div class="sm-logo-sm">⌁</div>
+      <div>
+        <h1 class="text-base font-semibold sm-text-primary leading-none">Samba Manager</h1>
+        <p class="text-xs sm-text-muted leading-none mt-1">/mnt/dati · condiviso via Samba</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-4">
+      <span class="text-xs sm-text-muted">{{ admin }}</span>
+      <button id="logout-btn" class="sm-btn-ghost text-xs">Esci</button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-6 py-8">
+
+    <div id="smb-warning" class="hidden sm-banner-warning mb-6">
+      <div>
+        <p class="font-medium">⚠️ Configurazione Samba non ottimale</p>
+        <p class="text-sm sm-text-muted mt-1">
+          La sezione [Dati] contiene ancora <code class="sm-code">force user = smbuser</code>:
+          tutti gli utenti vengono visti dal file system come lo stesso utente, quindi i
+          permessi granulari per singolo utente non hanno effetto reale.
+        </p>
+      </div>
+      <button id="fix-smb-btn" class="sm-btn-primary shrink-0">Correggi automaticamente</button>
+    </div>
+
+    <div class="grid gap-6 lg:grid-cols-3 mb-8">
+      <div class="lg:col-span-2">
+        <h2 class="text-sm font-semibold sm-text-muted uppercase tracking-wide mb-3">Utenti gestiti</h2>
+        <div class="sm-card overflow-hidden">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="sm-table-head">
+                <th class="text-left px-4 py-3">Utente</th>
+                <th class="text-left px-4 py-3">Scadenza</th>
+                <th class="text-left px-4 py-3">Stato</th>
+                <th class="text-right px-4 py-3">Azioni</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody">
+              <tr><td colspan="4" class="px-4 py-6 text-center sm-text-muted">Caricamento...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <h2 class="text-sm font-semibold sm-text-muted uppercase tracking-wide mb-3">Nuovo utente</h2>
+        <div class="sm-card p-5">
+          <form id="create-user-form" class="space-y-4">
+            <div>
+              <label class="sm-label">Username</label>
+              <input id="new-username" type="text" required pattern="[a-z_][a-z0-9_-]{0,31}" class="sm-input" placeholder="es. andrea">
+              <p class="text-xs sm-text-muted mt-1">minuscole, numeri, "_" o "-"</p>
+            </div>
+            <div>
+              <label class="sm-label">Password iniziale</label>
+              <input id="new-password" type="password" required minlength="8" class="sm-input" placeholder="min. 8 caratteri">
+            </div>
+            <div>
+              <label class="sm-label flex items-center gap-2">
+                <input id="no-expiry" type="checkbox" checked class="sm-checkbox">
+                Durata infinita
+              </label>
+            </div>
+            <div id="expiry-wrapper" class="hidden">
+              <label class="sm-label">Scadenza account</label>
+              <input id="expiry-date" type="date" class="sm-input">
+            </div>
+            <p id="create-error" class="text-sm text-rose-400 hidden"></p>
+            <button type="submit" class="sm-btn-primary w-full">Crea utente</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modale reset password -->
+  <div id="reset-modal" class="sm-modal-overlay hidden">
+    <div class="sm-card p-6 w-full max-w-sm">
+      <h3 class="font-semibold sm-text-primary mb-4">Reset password — <span id="reset-username" class="sm-code"></span></h3>
+      <input id="reset-new-password" type="password" minlength="8" class="sm-input mb-4" placeholder="Nuova password (min. 8 caratteri)">
+      <p id="reset-error" class="text-sm text-rose-400 hidden mb-3"></p>
+      <div class="flex gap-3 justify-end">
+        <button id="reset-cancel" class="sm-btn-ghost">Annulla</button>
+        <button id="reset-confirm" class="sm-btn-primary">Conferma</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

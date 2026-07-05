@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Samba Manager — Accesso</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="sm-body flex items-center justify-center min-h-screen">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <div class="sm-logo mx-auto mb-4">⌁</div>
+      <h1 class="text-xl font-semibold sm-text-primary tracking-tight">Samba Manager</h1>
+      <p class="text-sm sm-text-muted mt-1">Pannello amministrazione condivisione /mnt/dati</p>
+    </div>
+
+    <div class="sm-card p-6">
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="sm-label">Username amministratore</label>
+          <input id="username" type="text" autocomplete="username" required class="sm-input" placeholder="admin">
+        </div>
+        <div>
+          <label class="sm-label">Password</label>
+          <input id="password" type="password" autocomplete="current-password" required class="sm-input" placeholder="••••••••">
+        </div>
+        <p id="error-box" class="text-sm text-rose-400 hidden"></p>
+        <button type="submit" class="sm-btn-primary w-full">Accedi</button>
+      </form>
+    </div>
+    <p class="text-xs sm-text-muted text-center mt-6">Sessione valida 12 ore · Nessun dato analitico esterno</p>
+  </div>
+  <script src="/static/js/login.js"></script>
+</body>
+</html>

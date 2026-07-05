@@ -1,0 +1,19 @@
+# Esempio della sezione [Dati] DOPO la correzione applicata automaticamente
+# dalla Web App (pulsante "Correggi automaticamente" in dashboard, oppure
+# endpoint POST /api/smb-fix). Riportato qui solo come riferimento/fallback
+# per una modifica manuale in caso di necessità.
+#
+# Cosa cambia rispetto all'originale:
+#   - RIMOSSA: force user = smbuser   (appiattiva tutti gli utenti sullo stesso
+#     proprietario di file system, rendendo inutili le ACL per-utente)
+#   - AGGIUNTA/SOSTITUITA: valid users = @smbgroup   (chiunque sia nel gruppo
+#     Linux "smbgroup" può autenticarsi sulla condivisione; i permessi reali
+#     su file e cartelle restano governati dalle POSIX ACL per singolo utente)
+
+[Dati]
+        comment = Archivio NAS
+        create mask = 0660
+        directory mask = 0770
+        path = /mnt/dati
+        read only = No
+        valid users = @smbgroup

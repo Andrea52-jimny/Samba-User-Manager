@@ -13,18 +13,36 @@ seed_if_empty() {
   fi
 }
 
-# --- Stato utenti/gruppi di sistema (bind-mount di singoli file da compose) ---
-seed_if_empty /etc/passwd  /opt/defaults/passwd
-seed_if_empty /etc/shadow  /opt/defaults/shadow
-seed_if_empty /etc/group   /opt/defaults/group
-seed_if_empty /etc/gshadow /opt/defaults/gshadow
+# --- Stato utenti/gruppi di sistema -----------------------------------------
+# IMPORTANTE: /etc/passwd, /etc/shadow, /etc/group, /etc/gshadow NON sono
+# bind-montati direttamente (se lo fossero, sarebbero dei mountpoint e
+# useradd/groupadd/passwd, che scrivono con schema "tmpfile + rename()",
+# fallirebbero con "failure while writing changes to /etc/group": un rename
+# non puo' sostituire un mountpoint). Si monta invece UNA directory
+# (PERSIST_USERS_DIR) con le copie persistenti, che vengono copiate DENTRO
+# /etc a ogni avvio; dopo ogni modifica (vedi app/samba_manager.py) l'app
+# ricopia i file aggiornati FUORI, verso questa stessa directory.
+PERSIST_USERS_DIR="${PERSIST_USERS_DIR:-/persist/users}"
+mkdir -p "${PERSIST_USERS_DIR}"
+for f in passwd shadow group gshadow; do
+  if [ ! -s "${PERSIST_USERS_DIR}/${f}" ]; then
+    echo "[entrypoint] seed iniziale di ${PERSIST_USERS_DIR}/${f}"
+    cp "/opt/defaults/${f}" "${PERSIST_USERS_DIR}/${f}"
+  fi
+  cp "${PERSIST_USERS_DIR}/${f}" "/etc/${f}"
+done
 
 # --- Configurazione e stato Samba (volumi su /etc/samba e /var/lib/samba) ---
 mkdir -p /etc/samba /var/lib/samba/private /var/log/samba
 seed_if_empty /etc/samba/smb.conf /opt/defaults/smb.conf.default
 
 # --- Gruppo di sistema per gli utenti Samba gestiti dall'app ---
-getent group "${SAMBA_GROUP:-smbgroup}" >/dev/null || groupadd "${SAMBA_GROUP:-smbgroup}"
+if ! getent group "${SAMBA_GROUP:-smbgroup}" >/dev/null; then
+  groupadd "${SAMBA_GROUP:-smbgroup}"
+  for f in passwd shadow group gshadow; do
+    cp "/etc/${f}" "${PERSIST_USERS_DIR}/${f}"
+  done
+fi
 
 # --- Cartella dati persistente per il DB SQLite dell'app ---
 mkdir -p "$(dirname "${SMB_DB_PATH:-/app/data/smb_manager.db}")"

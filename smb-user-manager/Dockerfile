@@ -42,6 +42,7 @@ ENV SMB_ROOT_PATH=/mnt/dati \
     SMB_CONF_PATH=/etc/samba/smb.conf \
     SAMBA_GROUP=smbgroup \
     SMB_DB_PATH=/app/data/smb_manager.db \
+    PERSIST_USERS_DIR=/persist/users \
     ADMIN_USERNAME=admin \
     ADMIN_PASSWORD=ChangeMe123!
 

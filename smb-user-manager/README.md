@@ -102,24 +102,43 @@ volumi.
 
 ### Perche' serve `./docker/prepare-state.sh`
 
-Se un percorso bind-mount non esiste ancora sull'host, Docker lo crea come
-**directory**, non come file. `/etc/passwd`, `/etc/shadow`, `/etc/group` e
-`/etc/gshadow` devono invece essere singoli file dentro il container (sono
-montati individualmente per persistere gli utenti Linux creati dall'app tra
-una ricreazione del container e l'altra). Lo script li pre-crea vuoti sul
-host; l'entrypoint del container li popola con i default di sistema al primo
-avvio se li trova vuoti.
+Crea semplicemente le cartelle sotto `./state/` se non esistono ancora,
+prima del primo avvio.
+
+### Come persistono gli utenti/gruppi Linux (`/etc/passwd` ecc.)
+
+**Non** sono bind-montati come singoli file. Se lo fossero, ognuno
+diventerebbe un *mountpoint*, e `useradd`/`groupadd`/`passwd` scrivono con lo
+schema "file temporaneo + `rename()`": un `rename()` non puo' sostituire un
+mountpoint, e il comando fallisce con un errore tipo
+`failure while writing changes to /etc/group` (causando un crash-loop del
+container, dato che l'entrypoint si ferma su quell'errore).
+
+Si monta invece **una directory** (`./state/users` -> `/persist/users`
+dentro il container) con le copie persistenti di `passwd`, `shadow`, `group`,
+`gshadow`:
+
+1. All'avvio, l'entrypoint copia questi 4 file **da** `/persist/users`
+   **verso** `/etc/` (o li seeda con i default dell'immagine se e' il primo
+   avvio): a questo punto `/etc/passwd` &c. sono file normali dentro il
+   container, non mountpoint, quindi `useradd`/`groupadd`/`smbpasswd`/`chage`
+   funzionano senza alcun problema.
+2. Dopo ogni operazione che modifica utenti o gruppi (creazione, sospensione,
+   reset password, scadenza, eliminazione — vedi `app/samba_manager.py`),
+   l'app ricopia gli stessi 4 file **da** `/etc/` **verso**
+   `/persist/users`, cosi' la modifica sopravvive alla prossima ricreazione
+   del container.
 
 ### Volumi persistenti (`docker-compose.yml`)
 
-| Volume host           | Contenuto                                             |
-|------------------------|--------------------------------------------------------|
-| `/mnt/dati` (bind reale)| I dati NAS veri, stesso path usato in `smb.conf`       |
-| `./state/app-data`     | Database SQLite dell'app                                |
-| `./state/samba-etc`    | `smb.conf` e configurazione Samba                       |
-| `./state/samba-private`| Database utenti Samba (`passdb.tdb`, `secrets.tdb`, ...)|
-| `./state/samba-log`    | Log di Samba                                            |
-| `./state/passwd` ecc.  | Utenti/gruppi Linux di sistema (persistenti)            |
+| Volume host             | Contenuto                                               |
+|--------------------------|----------------------------------------------------------|
+| `/mnt/dati` (bind reale)  | I dati NAS veri, stesso path usato in `smb.conf`         |
+| `./state/app-data`       | Database SQLite dell'app                                  |
+| `./state/samba-etc`      | `smb.conf` e configurazione Samba                         |
+| `./state/samba-private`  | Database utenti Samba (`passdb.tdb`, `secrets.tdb`, ...)  |
+| `./state/samba-log`      | Log di Samba                                              |
+| `./state/users`          | Copie persistenti di `passwd`/`shadow`/`group`/`gshadow`  |
 
 ### Perche' `privileged: true`
 

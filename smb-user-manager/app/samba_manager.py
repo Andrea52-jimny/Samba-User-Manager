@@ -17,11 +17,15 @@ Tutti i comandi vengono eseguiti con subprocess usando liste di argomenti
 (NON shell=True), quindi non sono soggetti a shell injection: ogni parametro
 e' passato come argomento separato al processo figlio.
 """
+import shutil
 import subprocess
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
-from .config import SAMBA_GROUP, NOLOGIN_SHELL
+from .config import SAMBA_GROUP, NOLOGIN_SHELL, PERSIST_USERS_DIR
+
+_USER_DB_FILES = ("passwd", "shadow", "group", "gshadow")
 
 
 class SambaCommandError(RuntimeError):
@@ -47,11 +51,34 @@ def _run(cmd: list, input_data: Optional[str] = None, check: bool = True) -> sub
     return result
 
 
+def _sync_user_db_to_persist():
+    """In ambiente Docker (PERSIST_USERS_DIR valorizzata dall'entrypoint),
+    copia /etc/passwd,shadow,group,gshadow verso il volume persistente dopo
+    ogni operazione che li modifica. Necessario perche' questi file NON sono
+    bind-montati direttamente (rname() di useradd/groupadd/passwd non puo'
+    sostituire un mountpoint): l'entrypoint li copia IN /etc all'avvio, e qui
+    li ricopiamo FUORI dopo ogni modifica, cosi' la prossima ricreazione del
+    container riparte dallo stato aggiornato. Fuori da Docker (variabile non
+    impostata) questa funzione non fa nulla.
+    """
+    if not PERSIST_USERS_DIR:
+        return
+    try:
+        Path(PERSIST_USERS_DIR).mkdir(parents=True, exist_ok=True)
+        for name in _USER_DB_FILES:
+            shutil.copy2(f"/etc/{name}", str(Path(PERSIST_USERS_DIR) / name))
+    except OSError as exc:
+        print(f"[samba_manager] ATTENZIONE: sync stato utenti verso {PERSIST_USERS_DIR} fallito: {exc}")
+
+
 def ensure_samba_group():
     """Crea il gruppo di sistema smbgroup se non esiste (idempotente)."""
     check = subprocess.run(["getent", "group", SAMBA_GROUP], capture_output=True, text=True)
     if check.returncode != 0:
-        _run(["groupadd", SAMBA_GROUP])
+        try:
+            _run(["groupadd", SAMBA_GROUP])
+        finally:
+            _sync_user_db_to_persist()
 
 
 def linux_user_exists(username: str) -> bool:
@@ -65,16 +92,19 @@ def create_linux_user(username: str):
     ensure_samba_group()
     if linux_user_exists(username):
         return
-    _run([
-        "useradd",
-        "-M",                 # nessuna home directory
-        "-N",                 # nessun gruppo privato personale
-        "-g", SAMBA_GROUP,
-        "-s", NOLOGIN_SHELL,
-        username,
-    ])
-    # L'account Linux resta bloccato per il login diretto (password '!'):
-    _run(["usermod", "-L", username])
+    try:
+        _run([
+            "useradd",
+            "-M",                 # nessuna home directory
+            "-N",                 # nessun gruppo privato personale
+            "-g", SAMBA_GROUP,
+            "-s", NOLOGIN_SHELL,
+            username,
+        ])
+        # L'account Linux resta bloccato per il login diretto (password '!'):
+        _run(["usermod", "-L", username])
+    finally:
+        _sync_user_db_to_persist()
 
 
 def set_samba_password(username: str, password: str, new_user: bool = False):
@@ -85,36 +115,51 @@ def set_samba_password(username: str, password: str, new_user: bool = False):
         args.append("-a")
     args.append(username)
     stdin_payload = f"{password}\n{password}\n"
-    _run(args, input_data=stdin_payload)
+    try:
+        _run(args, input_data=stdin_payload)
+    finally:
+        _sync_user_db_to_persist()
 
 
 def enable_samba_user(username: str):
-    _run(["smbpasswd", "-e", username])
-    # Riabilita anche l'account di sistema
-    subprocess.run(["usermod", "-U", username], capture_output=True, text=True)
+    try:
+        _run(["smbpasswd", "-e", username])
+        # Riabilita anche l'account di sistema
+        subprocess.run(["usermod", "-U", username], capture_output=True, text=True)
+    finally:
+        _sync_user_db_to_persist()
 
 
 def disable_samba_user(username: str):
     """Sospensione: l'utente non potra' PIU' autenticarsi via Samba,
     quindi non potra' vedere ne' accedere ad alcuna cartella condivisa."""
-    _run(["smbpasswd", "-d", username])
-    # Blocco addizionale lato sistema (difesa in profondita')
-    subprocess.run(["usermod", "-L", username], capture_output=True, text=True)
+    try:
+        _run(["smbpasswd", "-d", username])
+        # Blocco addizionale lato sistema (difesa in profondita')
+        subprocess.run(["usermod", "-L", username], capture_output=True, text=True)
+    finally:
+        _sync_user_db_to_persist()
 
 
 def set_account_expiry(username: str, expiry_date: Optional[str]):
     """expiry_date: stringa 'YYYY-MM-DD' oppure None per durata infinita."""
-    if expiry_date:
-        _run(["chage", "-E", expiry_date, username])
-    else:
-        _run(["chage", "-E", "-1", username])
+    try:
+        if expiry_date:
+            _run(["chage", "-E", expiry_date, username])
+        else:
+            _run(["chage", "-E", "-1", username])
+    finally:
+        _sync_user_db_to_persist()
 
 
 def delete_user_completely(username: str):
     """Rimuove l'utente da Samba, dal sistema Linux e (a cura del chiamante)
     dal database applicativo."""
-    subprocess.run(["smbpasswd", "-x", username], capture_output=True, text=True)
-    subprocess.run(["deluser", username], capture_output=True, text=True)
+    try:
+        subprocess.run(["smbpasswd", "-x", username], capture_output=True, text=True)
+        subprocess.run(["deluser", username], capture_output=True, text=True)
+    finally:
+        _sync_user_db_to_persist()
 
 
 def reset_password(username: str, new_password: str):

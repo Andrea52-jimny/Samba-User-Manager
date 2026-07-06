@@ -30,6 +30,22 @@ function randomPassword() {
   return pw;
 }
 
+// Formato richiesto da <input type="datetime-local">: "YYYY-MM-DDTHH:MM"
+// in ora LOCALE (non UTC, altrimenti getTimezoneOffset() andrebbe sottratto
+// in modo diverso). Usato per precompilare tutti i selettori data/ora con
+// il momento attuale, cosi' l'admin parte gia' da un valore valido invece
+// di un campo vuoto quando disattiva "durata infinita".
+function nowLocalDatetimeString() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+}
+
+function prefillIfEmpty(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el.value) el.value = nowLocalDatetimeString();
+}
+
 async function loadUsers() {
   const { users } = await apiGet("/api/users");
   const tbody = document.getElementById("users-tbody");
@@ -113,8 +129,10 @@ async function loadSmbStatus() {
 }
 
 // --- Creazione utente ---
+prefillIfEmpty("expiry-date-input");
 document.getElementById("infinite-checkbox").addEventListener("change", (e) => {
   document.getElementById("expiry-date-input").disabled = e.target.checked;
+  if (!e.target.checked) prefillIfEmpty("expiry-date-input");
 });
 
 document.getElementById("gen-password-btn").addEventListener("click", () => {
@@ -136,6 +154,7 @@ document.getElementById("create-user-form").addEventListener("submit", async (e)
     form.reset();
     document.getElementById("infinite-checkbox").checked = true;
     document.getElementById("expiry-date-input").disabled = true;
+    document.getElementById("expiry-date-input").value = nowLocalDatetimeString();
     await loadUsers();
     await loadAudit();
   } catch (err) {
@@ -183,7 +202,7 @@ document.getElementById("users-tbody").addEventListener("click", async (e) => {
     const input = document.getElementById("expiry-modal-input");
     infiniteCb.checked = !currentExpiry;
     input.disabled = !currentExpiry;
-    input.value = currentExpiry;
+    input.value = currentExpiry || nowLocalDatetimeString();
     openModal("expiry-modal");
   }
 
@@ -194,13 +213,14 @@ document.getElementById("users-tbody").addEventListener("click", async (e) => {
     document.getElementById("clone-password-input").value = randomPassword();
     document.getElementById("clone-infinite-checkbox").checked = true;
     document.getElementById("clone-expiry-input").disabled = true;
-    document.getElementById("clone-expiry-input").value = "";
+    document.getElementById("clone-expiry-input").value = nowLocalDatetimeString();
     openModal("clone-modal");
   }
 });
 
 document.getElementById("expiry-infinite-checkbox").addEventListener("change", (e) => {
   document.getElementById("expiry-modal-input").disabled = e.target.checked;
+  if (!e.target.checked) prefillIfEmpty("expiry-modal-input");
 });
 
 document.getElementById("expiry-confirm-btn").addEventListener("click", async () => {
@@ -224,6 +244,7 @@ document.getElementById("clone-gen-password-btn").addEventListener("click", () =
 
 document.getElementById("clone-infinite-checkbox").addEventListener("change", (e) => {
   document.getElementById("clone-expiry-input").disabled = e.target.checked;
+  if (!e.target.checked) prefillIfEmpty("clone-expiry-input");
 });
 
 document.getElementById("clone-confirm-btn").addEventListener("click", async () => {

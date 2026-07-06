@@ -157,9 +157,26 @@ async function loadAssignments() {
   }
 }
 
+async function revokeAll() {
+  const ok = confirm(
+    `Revocare TUTTE le assegnazioni esplicite di "${TARGET_USERNAME}" su ogni cartella e sottocartella?\n` +
+    `L'operazione toglie subito l'accesso su tutto lo share e non e' annullabile.`
+  );
+  if (!ok) return;
+  try {
+    await apiPost(`/api/permissions/${encodeURIComponent(TARGET_USERNAME)}/revoke-all`);
+    toast(`Tutte le assegnazioni di "${TARGET_USERNAME}" sono state revocate.`, "success");
+    await loadAssignments();
+    if (selectedPath !== null) await selectPath(selectedPath);
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
 document.getElementById("apply-recursive-btn").addEventListener("click", () => applyPermission(true));
 document.getElementById("apply-single-btn").addEventListener("click", () => applyPermission(false));
 document.getElementById("refresh-tree-btn").addEventListener("click", loadRoot);
+document.getElementById("revoke-all-btn").addEventListener("click", revokeAll);
 
 loadRoot();
 loadAssignments();

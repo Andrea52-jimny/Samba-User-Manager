@@ -74,7 +74,13 @@
       </div>
 
       <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
-        <h2 class="text-sm font-semibold text-white mb-3">📋 Assegnazioni esplicite</h2>
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white">📋 Assegnazioni esplicite</h2>
+          <button id="revoke-all-btn" title="Toglie tutte le assegnazioni esplicite dell'utente su ogni cartella e sottocartella"
+                  class="text-[11px] px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white transition">
+            🛑 Revoca tutto
+          </button>
+        </div>
         <div id="assignments-list" class="text-xs space-y-1.5 max-h-56 overflow-y-auto scrollbar-thin"></div>
       </div>
     </section>

@@ -354,6 +354,17 @@ def api_get_all_permissions(username: str, admin: str = Depends(require_admin_ap
     return {"assignments": acl_manager.list_all_permissions_for_user(username)}
 
 
+@app.post("/api/permissions/{username}/revoke-all")
+def api_revoke_all_permissions(username: str, admin: str = Depends(require_admin_api)):
+    """Revoca TUTTE le assegnazioni esplicite dell'utente su qualunque
+    cartella/sottocartella (ACL sul filesystem + righe nel DB), senza
+    toccare l'account Samba/Linux (a differenza dell'eliminazione utente)."""
+    _assert_user_exists(username)
+    acl_manager.remove_all_permissions_for_user(username)
+    log_action(admin, "revoke-all-permissions", username)
+    return {"ok": True}
+
+
 @app.post("/api/permissions/{username}")
 def api_set_permission(username: str, payload: dict = Body(...), admin: str = Depends(require_admin_api)):
     _assert_user_exists(username)

@@ -79,6 +79,23 @@ def _expiry_watcher_loop():
         time.sleep(EXPIRY_CHECK_INTERVAL_SECONDS)
 
 
+def _suspend_user_full(username: str, actor: str, action: str, details: str = ""):
+    """Sospensione completa e coerente in OGNI punto dell'app che sospende
+    un utente (manuale dalla dashboard, oppure automatica per scadenza):
+    1) blocca il login Samba/Unix, 2) toglie l'accesso EFFETTIVO sul
+    filesystem (le assegnazioni restano salvate in DB, cosi' la matrice
+    permessi non si perde e viene ripristinata automaticamente al resume),
+    3) chiude a forza eventuali sessioni SMB gia' stabilite (altrimenti un
+    client gia' connesso continuerebbe ad accedere ai file nonostante la
+    sospensione dell'account)."""
+    samba_manager.disable_samba_user(username)
+    acl_manager.revoke_all_filesystem_acls_for_user(username)
+    samba_manager.disconnect_user_sessions(username)
+    with db_cursor(commit=True) as cur:
+        cur.execute("UPDATE users SET suspended = 1 WHERE username = ?", (username,))
+    log_action(actor, action, username, details)
+
+
 def _check_expired_accounts():
     # expiry_date ha granularita' data+ora ("YYYY-MM-DDTHH:MM"): il confronto
     # lessicografico su stringhe in questo formato equivale al confronto
@@ -92,10 +109,7 @@ def _check_expired_accounts():
         expired = [r["username"] for r in cur.fetchall()]
     for username in expired:
         try:
-            samba_manager.disable_samba_user(username)
-            with db_cursor(commit=True) as cur:
-                cur.execute("UPDATE users SET suspended = 1 WHERE username = ?", (username,))
-            log_action("system", "auto-suspend-expired", username, "Account scaduto sospeso automaticamente")
+            _suspend_user_full(username, "system", "auto-suspend-expired", "Account scaduto: sospeso automaticamente")
         except Exception as exc:
             print(f"[expiry-watcher] impossibile sospendere {username}: {exc}")
 
@@ -238,19 +252,9 @@ def api_create_user(payload: dict = Body(...), admin: str = Depends(require_admi
 def api_suspend_user(username: str, admin: str = Depends(require_admin_api)):
     _assert_user_exists(username)
     try:
-        samba_manager.disable_samba_user(username)
+        _suspend_user_full(username, admin, "suspend-user")
     except samba_manager.SambaCommandError as exc:
         raise HTTPException(500, str(exc))
-    # Toglie subito l'accesso effettivo sul filesystem (le assegnazioni
-    # restano salvate in DB per il ripristino al resume) e chiude a forza
-    # eventuali connessioni SMB gia' stabilite: altrimenti un client gia'
-    # connesso continuerebbe a leggere/scrivere/cancellare file nonostante
-    # la sospensione dell'account.
-    acl_manager.revoke_all_filesystem_acls_for_user(username)
-    samba_manager.disconnect_user_sessions(username)
-    with db_cursor(commit=True) as cur:
-        cur.execute("UPDATE users SET suspended = 1 WHERE username = ?", (username,))
-    log_action(admin, "suspend-user", username)
     return {"ok": True}
 
 

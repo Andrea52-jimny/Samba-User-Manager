@@ -37,6 +37,7 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
+from . import samba_manager
 from .config import ROOT_PATH
 from .database import db_cursor
 
@@ -187,6 +188,13 @@ def apply_permissions(username: str, relpath: str, read: bool, write: bool, dele
     _run(["setfacl", *flags, "-d", "-m", f"u:{username}:{perm}", str(target)], check=False)
 
     _upsert_db_permission(username, relpath, read, write, delete)
+    # Forza la riconnessione: un client Windows/macOS gia' connesso puo'
+    # avere in cache locale (oplock/directory cache di Explorer) il listato
+    # o il contenuto di file letti PRIMA della modifica, e continuare a
+    # mostrarli come leggibili anche dopo che il permesso e' stato tolto sul
+    # server, finche' non si riconnette. Chiudendo la sessione, la prossima
+    # richiesta riparte da zero e rispetta subito la nuova ACL.
+    samba_manager.disconnect_user_sessions(username)
     return {"path": relpath, "read": read, "write": write, "delete": delete, "recursive": recursive}
 
 
@@ -196,6 +204,7 @@ def remove_permissions(username: str, relpath: str, recursive: bool = True) -> d
     _run(["setfacl", *flags, "-x", f"u:{username}", str(target)], check=False)
     _run(["setfacl", *flags, "-d", "-x", f"u:{username}", str(target)], check=False)
     _delete_db_permission(username, relpath)
+    samba_manager.disconnect_user_sessions(username)
     return {"path": relpath, "read": False, "write": False, "delete": False, "recursive": recursive}
 
 

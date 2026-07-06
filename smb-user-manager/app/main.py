@@ -301,11 +301,21 @@ def api_delete_user(username: str, admin: str = Depends(require_admin_api)):
     # client gia' connesso continuerebbe a operare sui file anche dopo che
     # l'utente e' stato eliminato da Samba/Linux.
     samba_manager.disconnect_user_sessions(username)
+    # IMPORTANTE: le ACL vanno rimosse PRIMA di eliminare l'utente Linux.
+    # 'setfacl -x u:username' deve risolvere lo username in un UID (via
+    # getpwnam): se l'utente e' gia' stato cancellato (deluser), la voce
+    # 'u:username:...' non risolve piu' a nulla e setfacl fallisce in
+    # silenzio, lasciando sul disco la vecchia ACL legata al vecchio UID
+    # numerico. Se in futuro si ricrea un utente con lo stesso username e
+    # Linux gli riassegna lo stesso UID (molto comune, e' il primo libero),
+    # quella vecchia ACL "torna valida" e il nuovo utente eredita permessi
+    # mai assegnati nel DB. Rimuovendo le ACL PRIMA della cancellazione
+    # dell'account, setfacl risolve ancora correttamente lo username.
+    acl_manager.remove_all_permissions_for_user(username)
     try:
         samba_manager.delete_user_completely(username)
     except Exception as exc:
-        pass  # procede comunque con la pulizia lato ACL/DB
-    acl_manager.remove_all_permissions_for_user(username)
+        pass  # procede comunque con la pulizia lato DB
     with db_cursor(commit=True) as cur:
         cur.execute("DELETE FROM users WHERE username = ?", (username,))
     log_action(admin, "delete-user", username)

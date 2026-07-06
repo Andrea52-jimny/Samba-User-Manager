@@ -152,9 +152,23 @@ def _lock_down_other(target: Path, flags: list):
     gia' assegnate ad altri utenti su quella cartella. 'setfacl g::'/'o::'
     invece agiscono sempre sulla voce base proprietario-gruppo/altri, mai
     sulla mask, quindi non toccano le assegnazioni nominali esistenti.
+
+    INOLTRE: riporta il PROPRIETARIO Unix (owner) a root:root. Questo e' il
+    bug piu' insidioso di tutti, perche' la classe "owner" ha SEMPRE la
+    precedenza assoluta su ACL/gruppo/altri: se una cartella risulta
+    posseduta (owner reale, non solo gruppo) da un UID che poi coincide per
+    caso con un utente Samba gestito dall'app (es. cartelle copiate/create
+    fuori dall'app con owner UID 1000, e il primo utente creato dall'app
+    dentro il container ottiene anch'esso UID 1000 da useradd), quell'utente
+    ha SEMPRE pieno accesso rwx come proprietario del file, del tutto a
+    prescindere da qualunque ACL, revoca o bit di gruppo/altri azzerato.
+    root non viene mai assegnato come UID a un utente creato dall'app
+    (useradd parte sempre da UID >= 1000), quindi non puo' mai piu'
+    coincidere per caso con un utente Samba gestito.
     """
     _run(["setfacl", *flags, "-m", "g::0,o::0", str(target)], check=False)
     _run(["setfacl", *flags, "-d", "-m", "g::0,o::0", str(target)], check=False)
+    _run(["chown", *flags, "root:root", str(target)], check=False)
 
 
 def apply_permissions(username: str, relpath: str, read: bool, write: bool, delete: bool, recursive: bool = True) -> dict:

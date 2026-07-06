@@ -354,6 +354,20 @@ def api_get_all_permissions(username: str, admin: str = Depends(require_admin_ap
     return {"assignments": acl_manager.list_all_permissions_for_user(username)}
 
 
+@app.post("/api/permissions/{username}/reset-inherit")
+def api_reset_inherit_permission(username: str, payload: dict = Body(...), admin: str = Depends(require_admin_api)):
+    """Elimina l'assegnazione esplicita su un percorso specifico (torna a
+    ereditare da una cartella antenata), a differenza di un'assegnazione
+    esplicita "0 permessi" impostata tramite l'endpoint normale con tutte
+    le checkbox spente."""
+    _assert_user_exists(username)
+    path = payload.get("path", "")
+    recursive = payload.get("recursive", True)
+    result = acl_manager.remove_permissions(username, path, recursive=recursive)
+    log_action(admin, "reset-inherit-permission", username, f"path={path} recursive={recursive}")
+    return result
+
+
 @app.post("/api/permissions/{username}/revoke-all")
 def api_revoke_all_permissions(username: str, admin: str = Depends(require_admin_api)):
     """Revoca TUTTE le assegnazioni esplicite dell'utente su qualunque

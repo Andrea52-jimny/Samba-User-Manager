@@ -69,8 +69,13 @@
         </div>
         <p class="text-[11px] text-slate-500 mt-3 leading-relaxed">
           "Ricorsivo" applica il permesso alla cartella selezionata e a tutte le sue sottocartelle, e imposta l'ereditarieta' per i contenuti futuri.
-          Un permesso impostato su una sottocartella specifica sovrascrive quanto ereditato dal genitore.
+          Un permesso impostato su una sottocartella specifica sovrascrive quanto ereditato dal genitore. Togliere tutte le spuncte e applicare
+          blocca esplicitamente l'accesso qui (non equivale a "nessuna assegnazione").
         </p>
+        <button id="reset-inherit-btn" disabled
+                class="w-full mt-3 rounded-lg py-2 text-[11px] font-semibold border border-slate-700 hover:bg-slate-800 disabled:opacity-40 text-slate-300">
+          ↩ Ripristina ereditarieta' (rimuovi assegnazione qui)
+        </button>
       </div>
 
       <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">

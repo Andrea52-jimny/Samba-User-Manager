@@ -173,15 +173,33 @@ def _lock_down_other(target: Path, flags: list):
 
 
 def apply_permissions(username: str, relpath: str, read: bool, write: bool, delete: bool, recursive: bool = True) -> dict:
-    if not any([read, write, delete]):
-        return remove_permissions(username, relpath, recursive=recursive)
-
     target = abs_path(relpath)
-    perm = build_perm_string(read, write, delete)
     flags = ["-R"] if recursive else []
 
     _lock_down_other(target, flags)
 
+    if not any([read, write, delete]):
+        # IMPORTANTE: "nessun permesso" qui significa "blocca esplicitamente
+        # l'accesso su QUESTO percorso", NON "rimuovi l'assegnazione e torna
+        # a ereditare dal genitore" (che e' invece cio' che fa
+        # remove_permissions/"Revoca tutto"). Se una cartella superiore ha
+        # gia' un'assegnazione ricorsiva (es. rwx su tutta la sotto-albero),
+        # cancellare semplicemente la riga DB di questa sottocartella
+        # farebbe ripiegare la UI e la logica di ereditarieta' sul permesso
+        # del genitore, facendolo apparire "tornato" anche se l'accesso
+        # reale sul filesystem e' stato tolto correttamente (group/other
+        # sono comunque azzerati da _lock_down_other). Si toglie la voce
+        # ACL nominale (l'accesso reale e' zero) ma si mantiene una riga
+        # esplicita nel DB con read/write/delete a 0, cosi' che sia la UI
+        # sia get_effective_permission riportino "0 permessi qui" invece di
+        # risalire erroneamente al genitore.
+        _run(["setfacl", *flags, "-x", f"u:{username}", str(target)], check=False)
+        _run(["setfacl", *flags, "-d", "-x", f"u:{username}", str(target)], check=False)
+        _upsert_db_permission(username, relpath, False, False, False)
+        samba_manager.disconnect_user_sessions(username)
+        return {"path": relpath, "read": False, "write": False, "delete": False, "recursive": recursive}
+
+    perm = build_perm_string(read, write, delete)
     _run(["setfacl", *flags, "-m", f"u:{username}:{perm}", str(target)])
     # ACL di default: valida solo sulle directory, applicata automaticamente
     # solo dove ha senso anche in modalita' ricorsiva.
@@ -199,6 +217,12 @@ def apply_permissions(username: str, relpath: str, read: bool, write: bool, dele
 
 
 def remove_permissions(username: str, relpath: str, recursive: bool = True) -> dict:
+    """Usato per "Ripristina ereditarieta'": elimina l'assegnazione ESPLICITA
+    su questo percorso specifico (riga DB compresa), cosi' che torni a
+    dipendere da quanto assegnato su una cartella antenata (o da nessun
+    accesso, se non ce n'e' nessuna). Diverso da 'apply_permissions' con
+    tutte le checkbox spente, che invece registra un blocco esplicito a 0
+    permessi proprio su questo percorso (vedi commento li')."""
     target = abs_path(relpath)
     flags = ["-R"] if recursive else []
     _run(["setfacl", *flags, "-x", f"u:{username}", str(target)], check=False)

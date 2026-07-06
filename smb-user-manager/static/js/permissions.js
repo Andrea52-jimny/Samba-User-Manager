@@ -97,6 +97,7 @@ async function selectPath(path) {
   document.getElementById("selected-path").textContent = "/" + path;
   document.getElementById("apply-recursive-btn").disabled = false;
   document.getElementById("apply-single-btn").disabled = false;
+  document.getElementById("reset-inherit-btn").disabled = false;
 
   try {
     const perm = await apiGet(`/api/permissions/${encodeURIComponent(TARGET_USERNAME)}?path=${encodeURIComponent(path)}`);
@@ -157,6 +158,25 @@ async function loadAssignments() {
   }
 }
 
+async function resetInherit() {
+  if (selectedPath === null) return;
+  const ok = confirm(
+    `Rimuovere l'assegnazione esplicita di "${TARGET_USERNAME}" su "/${selectedPath}"?\n` +
+    `Tornera' a dipendere da quanto ereditato da una cartella superiore (o da nessun accesso, se non c'e' nulla sopra).`
+  );
+  if (!ok) return;
+  try {
+    await apiPost(`/api/permissions/${encodeURIComponent(TARGET_USERNAME)}/reset-inherit`, {
+      path: selectedPath, recursive: true,
+    });
+    toast(`Assegnazione rimossa su "/${selectedPath}": ora eredita dal genitore.`, "success");
+    await loadAssignments();
+    await selectPath(selectedPath);
+  } catch (err) {
+    toast(err.message, "error");
+  }
+}
+
 async function revokeAll() {
   const ok = confirm(
     `Revocare TUTTE le assegnazioni esplicite di "${TARGET_USERNAME}" su ogni cartella e sottocartella?\n` +
@@ -177,6 +197,7 @@ document.getElementById("apply-recursive-btn").addEventListener("click", () => a
 document.getElementById("apply-single-btn").addEventListener("click", () => applyPermission(false));
 document.getElementById("refresh-tree-btn").addEventListener("click", loadRoot);
 document.getElementById("revoke-all-btn").addEventListener("click", revokeAll);
+document.getElementById("reset-inherit-btn").addEventListener("click", resetInherit);
 
 loadRoot();
 loadAssignments();

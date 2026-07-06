@@ -38,6 +38,13 @@ services:
       # modifica (vedi app/samba_manager.py).
       - ./state/users:/persist/users
     environment:
+      # Fuso orario del container: DEVE combaciare con quello di chi
+      # amministra (altrimenti le scadenze account impostate dal browser,
+      # che sono orari "locali" senza timezone, vengono confrontate contro
+      # l'orologio di sistema del container con uno scarto sistematico -
+      # es. UTC vs CEST = 2 ore di differenza). Cambia se necessario, poi
+      # basta 'docker compose up -d' (non serve rebuild).
+      - TZ=Europe/Rome
       - SMB_ROOT_PATH=/mnt/dati
       - SMB_CONF_PATH=/etc/samba/smb.conf
       - SAMBA_GROUP=smbgroup

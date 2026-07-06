@@ -7,6 +7,7 @@ concatenata direttamente in una query SQL.
 import sqlite3
 import threading
 from contextlib import contextmanager
+from datetime import datetime
 
 from .config import DB_PATH
 
@@ -109,8 +110,15 @@ def _migrate(conn: sqlite3.Connection):
 
 
 def log_action(admin_username: str, action: str, target: str = "", details: str = ""):
+    # NOTA: si passa esplicitamente l'orario calcolato in Python (rispetta
+    # il fuso orario di sistema del container, vedi TZ in docker-compose.yml)
+    # invece di usare il default SQL "datetime('now')": quella funzione di
+    # SQLite ritorna SEMPRE l'orario UTC, a prescindere dal fuso orario di
+    # sistema, quindi il log risulterebbe sfasato rispetto all'orologio
+    # locale dell'amministratore anche con TZ impostato correttamente.
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with db_cursor(commit=True) as cur:
         cur.execute(
-            "INSERT INTO audit_log (admin_username, action, target, details) VALUES (?, ?, ?, ?)",
-            (admin_username, action, target, details),
+            "INSERT INTO audit_log (timestamp, admin_username, action, target, details) VALUES (?, ?, ?, ?, ?)",
+            (now, admin_username, action, target, details),
         )

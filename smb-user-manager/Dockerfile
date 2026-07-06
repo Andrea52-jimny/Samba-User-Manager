@@ -6,7 +6,8 @@ FROM debian:bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH=/app
+    PYTHONPATH=/app \
+    TZ=Europe/Rome
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         samba \
@@ -16,6 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-venv \
         python3-pip \
         curl \
+        tzdata \
+    && ln -fs /usr/share/zoneinfo/${TZ} /etc/localtime \
+    && dpkg-reconfigure -f noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # Salva una copia "pulita" dei file di sistema che verranno poi montati come

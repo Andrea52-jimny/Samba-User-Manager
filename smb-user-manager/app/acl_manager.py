@@ -34,6 +34,7 @@ ereditato dal genitore, perche' viene scritto puntualmente su quel path.
 """
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -126,17 +127,20 @@ def build_perm_string(read: bool, write: bool, delete: bool) -> str:
 
 
 def _upsert_db_permission(username: str, relpath: str, read: bool, write: bool, delete: bool, recursive: bool = True):
+    # Orario calcolato in Python (rispetta il fuso orario TZ del container)
+    # invece di 'datetime(\'now\')' di SQLite, che ritorna sempre UTC.
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with db_cursor(commit=True) as cur:
         cur.execute(
             """INSERT INTO permissions (username, path, can_read, can_write, can_delete, recursive, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+               VALUES (?, ?, ?, ?, ?, ?, ?)
                ON CONFLICT(username, path) DO UPDATE SET
                  can_read=excluded.can_read,
                  can_write=excluded.can_write,
                  can_delete=excluded.can_delete,
                  recursive=excluded.recursive,
-                 updated_at=datetime('now')""",
-            (username, relpath, int(read), int(write), int(delete), int(recursive)),
+                 updated_at=excluded.updated_at""",
+            (username, relpath, int(read), int(write), int(delete), int(recursive), now),
         )
 
 

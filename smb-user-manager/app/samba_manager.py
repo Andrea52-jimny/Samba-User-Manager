@@ -21,7 +21,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Optional
 
-from config import SAMBA_GROUP, NOLOGIN_SHELL
+from .config import SAMBA_GROUP, NOLOGIN_SHELL
 
 
 class SambaCommandError(RuntimeError):

@@ -18,25 +18,37 @@ pool ZFS dell'host.
 
 ```
 smb-user-manager/
-  backend/
-    main.py              entry point FastAPI + tutte le route
-    config.py             configurazione da variabili d'ambiente
-    database.py           connessione SQLite + schema
-    init_db.py             script di bootstrap (da eseguire una volta)
-    auth.py                login admin, hashing, sessioni
-    samba_manager.py      useradd/smbpasswd/chage/deluser
-    acl_manager.py         scansione dinamica cartelle + setfacl/getfacl
-    smbconf_manager.py     riscrittura sicura di smb.conf
-    requirements.txt
-  frontend/
-    templates/            login.html, dashboard.html, permissions.html
-    static/js/             common.js, dashboard.js, permissions.js
-    static/css/custom.css
-  install.sh                script di installazione per il container LXC
-  smb-user-manager.service  unit file systemd
+  app/                       pacchetto Python (import relativi tra i moduli)
+    __init__.py
+    main.py                  entry point FastAPI + tutte le route
+    config.py                configurazione da variabili d'ambiente
+    database.py              connessione SQLite + schema
+    auth.py                  login admin, hashing, sessioni
+    samba_manager.py         useradd/smbpasswd/chage/deluser
+    acl_manager.py           scansione dinamica cartelle + setfacl/getfacl
+    smbconf_manager.py       riscrittura sicura di smb.conf
+  static/                    css/js
+  templates/                 login.html, dashboard.html, permissions.html
+  init_db.py                 script di bootstrap (da eseguire una volta)
+  requirements.txt
+  install.sh                 installazione diretta su LXC/VM (senza Docker)
+  smb-user-manager.service   unit file systemd (percorso non-Docker)
+  update.sh / cleanup.sh / reset-repo-from-prod.sh   deploy non-Docker
+  Dockerfile / docker-compose.yml / docker/          percorso containerizzato
 ```
 
-## Installazione nel container LXC
+L'app si avvia sempre come `uvicorn app.main:app` (non piu' `main:app`),
+dalla cartella radice del progetto.
+
+## Due modalita' di deployment
+
+Sono supportate entrambe le modalita' viste finora nel progetto:
+
+1. **LXC/VM diretto** (`install.sh` + systemd): vedi sezione successiva.
+2. **Docker / docker compose** (consigliato per aggiornamenti piu' semplici):
+   vedi la sezione "Deployment con Docker" piu' sotto.
+
+## Installazione diretta (LXC/VM, senza Docker)
 
 ```bash
 cd /opt
@@ -61,6 +73,77 @@ Lo script:
 
 Accesso: `http://<ip-container>:8000` — **cambiare subito la password admin**
 dal pulsante "Cambia password" in dashboard.
+
+Per aggiornare in seguito: `./update.sh` (vedi commenti nello script). Per
+pulire i residui di vecchie versioni: `./cleanup.sh` (dry-run di default,
+`--force` per eseguire davvero).
+
+## Deployment con Docker
+
+Un'unica immagine contiene sia `smbd` sia la Web App: devono girare nello
+stesso container perche' l'app crea utenti Linux reali (`useradd`,
+`smbpasswd`) che Samba deve vedere nello stesso namespace di sistema.
+
+```bash
+cd smb-user-manager
+./docker/prepare-state.sh   # crea ./state/ con i file vuoti necessari (una tantum)
+docker compose up -d --build
+```
+
+Poi, per ogni aggiornamento futuro (dopo un `git pull` sul codice):
+
+```bash
+docker compose up -d --build
+```
+
+Nessuno script di sincronizzazione manuale: l'immagine viene ricostruita con
+il nuovo codice, i container vengono ricreati, ma i dati persistono grazie ai
+volumi.
+
+### Perche' serve `./docker/prepare-state.sh`
+
+Se un percorso bind-mount non esiste ancora sull'host, Docker lo crea come
+**directory**, non come file. `/etc/passwd`, `/etc/shadow`, `/etc/group` e
+`/etc/gshadow` devono invece essere singoli file dentro il container (sono
+montati individualmente per persistere gli utenti Linux creati dall'app tra
+una ricreazione del container e l'altra). Lo script li pre-crea vuoti sul
+host; l'entrypoint del container li popola con i default di sistema al primo
+avvio se li trova vuoti.
+
+### Volumi persistenti (`docker-compose.yml`)
+
+| Volume host           | Contenuto                                             |
+|------------------------|--------------------------------------------------------|
+| `/mnt/dati` (bind reale)| I dati NAS veri, stesso path usato in `smb.conf`       |
+| `./state/app-data`     | Database SQLite dell'app                                |
+| `./state/samba-etc`    | `smb.conf` e configurazione Samba                       |
+| `./state/samba-private`| Database utenti Samba (`passdb.tdb`, `secrets.tdb`, ...)|
+| `./state/samba-log`    | Log di Samba                                            |
+| `./state/passwd` ecc.  | Utenti/gruppi Linux di sistema (persistenti)            |
+
+### Perche' `privileged: true`
+
+L'app esegue `useradd`, `smbpasswd`, `setfacl`, `chage` a livello di sistema
+e `smbd` deve gestire ACL e aprire socket privilegiati. In alternativa si
+puo' provare un set mirato di `cap_add` (es. `CAP_DAC_READ_SEARCH`,
+`CAP_CHOWN`, `CAP_FOWNER`, `CAP_SYS_ADMIN`), ma va validato caso per caso;
+`privileged: true` e' la scelta piu' semplice e affidabile per un homelab.
+
+### Porte
+
+`8000` (Web UI), `445` (SMB), `139` (NetBIOS, opzionale). Per usare la porta
+`80` per la UI, cambia `"8000:8000"` in `"80:8000"` in `docker-compose.yml`
+(non serve toccare nulla dentro il container).
+
+### Nota sul dataset ZFS (host)
+
+Come nel percorso non-Docker, il dataset ZFS che fa da backend a `/mnt/dati`
+deve avere `acltype=posixacl` sull'HOST (fuori da Docker):
+
+```bash
+zfs set acltype=posixacl pool/dataset
+zfs set xattr=sa pool/dataset
+```
 
 ## Correzione della configurazione Samba (force user)
 

@@ -8,7 +8,7 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 
-from config import DB_PATH
+from .config import DB_PATH
 
 _local = threading.local()
 

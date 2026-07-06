@@ -8,11 +8,11 @@ Type=simple
 # L'app deve girare come root: esegue useradd/deluser/smbpasswd/setfacl/chage
 # e modifica /etc/samba/smb.conf. Il container LXC fornisce l'isolamento.
 User=root
-WorkingDirectory=__APP_DIR__/backend
+WorkingDirectory=__APP_DIR__
 Environment=SMB_ROOT_PATH=/mnt/dati
 Environment=SMB_CONF_PATH=/etc/samba/smb.conf
 Environment=SAMBA_GROUP=smbgroup
-ExecStart=__APP_DIR__/venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
+ExecStart=__APP_DIR__/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=on-failure
 RestartSec=3
 

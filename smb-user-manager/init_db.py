@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Script di inizializzazione del database SQLite.
-Da eseguire UNA SOLA VOLTA alla prima installazione nel container LXC:
+Da eseguire UNA SOLA VOLTA alla prima installazione (o automaticamente
+dall'entrypoint Docker al primo avvio se il DB non esiste ancora):
 
-    cd backend
-    python3 init_db.py
+    python3 init_db.py     # dalla cartella radice del progetto (sibling di app/)
 
 Crea le tabelle e un amministratore di bootstrap. La password di default
 puo' essere personalizzata tramite le variabili d'ambiente ADMIN_USERNAME
@@ -19,8 +19,8 @@ import sys
 
 import bcrypt
 
-from config import DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD
-from database import init_db, db_cursor
+from app.config import DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD
+from app.database import init_db, db_cursor
 
 
 def create_bootstrap_admin():

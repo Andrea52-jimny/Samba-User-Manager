@@ -37,8 +37,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional
 
-from config import ROOT_PATH
-from database import db_cursor
+from .config import ROOT_PATH
+from .database import db_cursor
 
 
 class AclError(RuntimeError):

@@ -1,9 +1,10 @@
 """
 Entry point FastAPI - Web App gestione utenti e permessi granulari Samba.
 
-Avvio (dentro il container LXC, dalla cartella backend/):
-    uvicorn main:app --host 0.0.0.0 --port 8000
-(vedi anche smb-user-manager.service per l'unit systemd)
+Avvio (dalla cartella radice del progetto, che contiene il pacchetto app/):
+    uvicorn app.main:app --host 0.0.0.0 --port 8000
+(vedi anche smb-user-manager.service per systemd, oppure Dockerfile/docker-compose.yml
+per l'esecuzione containerizzata)
 """
 import re
 import threading
@@ -17,22 +18,23 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-import acl_manager
-import samba_manager
-import smbconf_manager
-from auth import (
+from . import acl_manager
+from . import samba_manager
+from . import smbconf_manager
+from .auth import (
     authenticate_admin, create_session, destroy_session, get_current_admin,
     change_admin_password, verify_password, hash_password,
 )
-from config import SESSION_COOKIE_NAME, SESSION_COOKIE_SECURE, EXPIRY_CHECK_INTERVAL_SECONDS, SAMBA_GROUP
-from database import init_db, db_cursor, log_action
+from .config import SESSION_COOKIE_NAME, SESSION_COOKIE_SECURE, EXPIRY_CHECK_INTERVAL_SECONDS, SAMBA_GROUP
+from .database import init_db, db_cursor, log_action
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-FRONTEND_DIR = BASE_DIR / "frontend"
+STATIC_DIR = BASE_DIR / "static"
+TEMPLATES_DIR = BASE_DIR / "templates"
 
 app = FastAPI(title="Samba User & Permission Manager")
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
-templates = Jinja2Templates(directory=str(FRONTEND_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 USERNAME_RE = re.compile(r"^[a-z][a-z0-9_-]{1,31}$")
 

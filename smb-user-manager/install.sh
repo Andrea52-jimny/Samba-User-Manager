@@ -44,10 +44,10 @@ echo "==> [5/7] Creazione ambiente virtuale Python e installazione dipendenze"
 cd "${APP_DIR}"
 python3 -m venv venv
 ./venv/bin/pip install --upgrade pip
-./venv/bin/pip install -r backend/requirements.txt
+./venv/bin/pip install -r requirements.txt
 
 echo "==> [6/7] Inizializzazione database SQLite"
-cd "${APP_DIR}/backend"
+cd "${APP_DIR}"
 "${APP_DIR}/venv/bin/python3" init_db.py
 
 echo "==> [7/7] Installazione servizio systemd"

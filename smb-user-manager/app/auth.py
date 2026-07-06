@@ -12,8 +12,8 @@ from typing import Optional
 import bcrypt
 from fastapi import Request
 
-from config import SESSION_TTL_HOURS
-from database import db_cursor
+from .config import SESSION_TTL_HOURS
+from .database import db_cursor
 
 
 def hash_password(plain_password: str) -> str:
@@ -72,7 +72,7 @@ def get_session_admin(token: Optional[str]) -> Optional[str]:
 
 
 def get_current_admin(request: Request) -> Optional[str]:
-    from config import SESSION_COOKIE_NAME
+    from .config import SESSION_COOKIE_NAME
     token = request.cookies.get(SESSION_COOKIE_NAME)
     return get_session_admin(token)
 

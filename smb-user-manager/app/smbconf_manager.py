@@ -25,7 +25,7 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-from config import SMB_CONF_PATH, SMB_SHARE_SECTION, SAMBA_GROUP
+from .config import SMB_CONF_PATH, SMB_SHARE_SECTION, SAMBA_GROUP
 
 
 class SmbConfError(RuntimeError):

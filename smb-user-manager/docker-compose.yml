@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  samba-manager:
+    build: .
+    image: samba-access-manager:latest
+    container_name: samba-manager
+    restart: unless-stopped
+    # Necessario: l'app esegue useradd/smbpasswd/setfacl/chage a livello di
+    # sistema e smbd deve poter aprire socket privilegiati e gestire ACL.
+    # In alternativa a 'privileged: true' si puo' provare con un set mirato
+    # di capabilities (cap_add), ma va testato caso per caso.
+    privileged: true
+    ports:
+      - "8000:8000"   # Web UI / API
+      - "445:445"     # SMB
+      - "139:139"     # NetBIOS (opzionale, solo client molto datati)
+    volumes:
+      # --- Dati NAS reali: bind mount dal dataset ZFS dell'host ---
+      # Deve essere lo stesso path che poi appare come "path" in smb.conf.
+      - /mnt/dati:/mnt/dati
+
+      # --- Stato persistente dell'app (DB SQLite: utenti, sessioni, ACL) ---
+      - ./state/app-data:/app/data
+
+      # --- Configurazione e database utenti Samba (persistente) ---
+      - ./state/samba-etc:/etc/samba
+      - ./state/samba-private:/var/lib/samba
+      - ./state/samba-log:/var/log/samba
+
+      # --- Utenti/gruppi Linux di sistema (persistenti tra ricreazioni) ---
+      # Bind mount di singoli file: al primo avvio, se vuoti, l'entrypoint
+      # li popola con i default dell'immagine (vedi docker/entrypoint.sh).
+      - ./state/passwd:/etc/passwd
+      - ./state/shadow:/etc/shadow
+      - ./state/group:/etc/group
+      - ./state/gshadow:/etc/gshadow
+    environment:
+      - SMB_ROOT_PATH=/mnt/dati
+      - SMB_CONF_PATH=/etc/samba/smb.conf
+      - SAMBA_GROUP=smbgroup
+      - SMB_DB_PATH=/app/data/smb_manager.db
+      # Amministratore di bootstrap (solo al primissimo avvio, quando il DB
+      # non esiste ancora). CAMBIARE la password dalla UI al primo accesso.
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=ChangeMe123!
+      - SESSION_COOKIE_SECURE=false

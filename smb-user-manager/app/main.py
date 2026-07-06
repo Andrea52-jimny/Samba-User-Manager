@@ -9,7 +9,7 @@ per l'esecuzione containerizzata)
 import re
 import threading
 import time
-from datetime import datetime, date
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -80,11 +80,14 @@ def _expiry_watcher_loop():
 
 
 def _check_expired_accounts():
-    today = date.today().isoformat()
+    # expiry_date ha granularita' data+ora ("YYYY-MM-DDTHH:MM"): il confronto
+    # lessicografico su stringhe in questo formato equivale al confronto
+    # cronologico (ISO 8601 e' ordinabile come stringa).
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M")
     with db_cursor() as cur:
         cur.execute(
             "SELECT username FROM users WHERE expiry_date IS NOT NULL AND expiry_date <= ? AND suspended = 0",
-            (today,),
+            (now,),
         )
         expired = [r["username"] for r in cur.fetchall()]
     for username in expired:
@@ -184,9 +187,11 @@ def api_list_users(admin: str = Depends(require_admin_api)):
     with db_cursor() as cur:
         cur.execute("SELECT username, created_at, expiry_date, suspended, notes FROM users ORDER BY username")
         rows = [dict(r) for r in cur.fetchall()]
-    today = date.today().isoformat()
+    # expiry_date ha granularita' data+ora: confronto coerente con
+    # _check_expired_accounts (stringhe ISO 8601, ordinabili lessicograficamente).
+    now = datetime.now().strftime("%Y-%m-%dT%H:%M")
     for r in rows:
-        r["expired"] = bool(r["expiry_date"] and r["expiry_date"] <= today)
+        r["expired"] = bool(r["expiry_date"] and r["expiry_date"] <= now)
     return {"users": rows}
 
 
@@ -203,9 +208,9 @@ def api_create_user(payload: dict = Body(...), admin: str = Depends(require_admi
         raise HTTPException(400, "La password deve avere almeno 8 caratteri.")
     if expiry_date:
         try:
-            datetime.strptime(expiry_date, "%Y-%m-%d")
+            datetime.strptime(expiry_date, "%Y-%m-%dT%H:%M")
         except ValueError:
-            raise HTTPException(400, "Formato data di scadenza non valido (YYYY-MM-DD).")
+            raise HTTPException(400, "Formato data/ora di scadenza non valido (atteso: selettore data e ora).")
 
     with db_cursor() as cur:
         cur.execute("SELECT 1 FROM users WHERE username = ?", (username,))
@@ -284,6 +289,11 @@ def api_set_expiry(username: str, payload: dict = Body(...), admin: str = Depend
     _assert_user_exists(username)
     infinite = bool(payload.get("infinite"))
     expiry_date = None if infinite else (payload.get("expiry_date") or None)
+    if expiry_date:
+        try:
+            datetime.strptime(expiry_date, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            raise HTTPException(400, "Formato data/ora di scadenza non valido (atteso: selettore data e ora).")
     try:
         samba_manager.set_account_expiry(username, expiry_date)
     except samba_manager.SambaCommandError as exc:
@@ -292,6 +302,52 @@ def api_set_expiry(username: str, payload: dict = Body(...), admin: str = Depend
         cur.execute("UPDATE users SET expiry_date = ? WHERE username = ?", (expiry_date, username))
     log_action(admin, "set-expiry", username, f"expiry={expiry_date}")
     return {"ok": True}
+
+
+@app.post("/api/users/{username}/clone")
+def api_clone_user(username: str, payload: dict = Body(...), admin: str = Depends(require_admin_api)):
+    """Crea un nuovo utente con username/password/scadenza indicati e gli
+    copia TUTTE le assegnazioni esplicite (ACL reali + righe DB, comprese
+    modalita' ricorsivo/solo-qui) dell'utente sorgente."""
+    _assert_user_exists(username)
+    new_username = (payload.get("new_username") or "").strip().lower()
+    password = payload.get("password") or ""
+    infinite = bool(payload.get("infinite"))
+    expiry_date = None if infinite else (payload.get("expiry_date") or None)
+
+    if not USERNAME_RE.match(new_username):
+        raise HTTPException(400, "Username non valido (minuscolo, 2-32 caratteri, lettere/numeri/-/_).")
+    if len(password) < 8:
+        raise HTTPException(400, "La password deve avere almeno 8 caratteri.")
+    if expiry_date:
+        try:
+            datetime.strptime(expiry_date, "%Y-%m-%dT%H:%M")
+        except ValueError:
+            raise HTTPException(400, "Formato data/ora di scadenza non valido (atteso: selettore data e ora).")
+
+    with db_cursor() as cur:
+        cur.execute("SELECT 1 FROM users WHERE username = ?", (new_username,))
+        if cur.fetchone():
+            raise HTTPException(409, "Utente gia' esistente.")
+
+    try:
+        samba_manager.create_linux_user(new_username)
+        samba_manager.set_samba_password(new_username, password, new_user=True)
+        if expiry_date:
+            samba_manager.set_account_expiry(new_username, expiry_date)
+    except samba_manager.SambaCommandError as exc:
+        raise HTTPException(500, f"Errore di sistema durante la creazione utente: {exc}")
+
+    with db_cursor(commit=True) as cur:
+        cur.execute(
+            "INSERT INTO users (username, expiry_date, suspended) VALUES (?, ?, 0)",
+            (new_username, expiry_date),
+        )
+
+    copied = acl_manager.clone_permissions(username, new_username)
+
+    log_action(admin, "clone-user", new_username, f"da={username} expiry={expiry_date} permessi_copiati={copied}")
+    return {"ok": True, "username": new_username, "copied_permissions": copied}
 
 
 @app.delete("/api/users/{username}")

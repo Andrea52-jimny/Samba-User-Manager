@@ -87,8 +87,9 @@
               <input type="checkbox" id="infinite-checkbox" checked class="rounded border-slate-600 bg-slate-950">
               Durata infinita (nessuna scadenza)
             </label>
-            <input type="date" name="expiry_date" id="expiry-date-input" disabled
+            <input type="datetime-local" name="expiry_date" id="expiry-date-input" disabled
                    class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <p class="text-[11px] text-slate-500 mt-1.5">Modificabile in qualsiasi momento dopo la creazione (icona 📅 nella tabella utenti).</p>
           </div>
           <button type="submit"
                   class="w-full bg-indigo-500 hover:bg-indigo-400 transition rounded-lg py-2.5 text-sm font-semibold text-white">
@@ -117,6 +118,55 @@
       <div class="flex gap-2 justify-end">
         <button onclick="closeModal('reset-modal')" class="px-3 py-1.5 rounded-lg text-xs border border-slate-700 hover:bg-slate-800">Annulla</button>
         <button id="reset-confirm-btn" class="px-3 py-1.5 rounded-lg text-xs bg-indigo-500 hover:bg-indigo-400 font-semibold">Conferma</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale copia utente -->
+  <div id="clone-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm">
+      <h3 class="text-sm font-semibold text-white mb-1">Copia permessi da <span id="clone-source-username" class="text-indigo-400"></span></h3>
+      <p class="text-xs text-slate-500 mb-4">Crea un nuovo utente con tutte le stesse assegnazioni di accesso (cartelle, ricorsivo/solo-qui) dell'utente sorgente.</p>
+
+      <label class="block text-xs font-medium text-slate-400 mb-1.5">Nuovo username</label>
+      <input id="clone-username-input" pattern="[a-z][a-z0-9_-]{1,31}" placeholder="nuovo-utente"
+             class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+
+      <label class="block text-xs font-medium text-slate-400 mb-1.5">Password</label>
+      <div class="flex gap-2 mb-3">
+        <input id="clone-password-input" type="text" minlength="8" placeholder="Password"
+               class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+        <button type="button" id="clone-gen-password-btn" title="Genera password"
+                class="px-3 rounded-lg border border-slate-700 hover:bg-slate-800 text-sm">🎲</button>
+      </div>
+
+      <label class="flex items-center gap-2 text-xs font-medium text-slate-400 mb-2">
+        <input type="checkbox" id="clone-infinite-checkbox" checked class="rounded border-slate-600 bg-slate-950">
+        Durata infinita (nessuna scadenza)
+      </label>
+      <input type="datetime-local" id="clone-expiry-input" disabled
+             class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-4 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="closeModal('clone-modal')" class="px-3 py-1.5 rounded-lg text-xs border border-slate-700 hover:bg-slate-800">Annulla</button>
+        <button id="clone-confirm-btn" class="px-3 py-1.5 rounded-lg text-xs bg-indigo-500 hover:bg-indigo-400 font-semibold">Crea e copia permessi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modale modifica scadenza -->
+  <div id="expiry-modal" class="hidden fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-sm">
+      <h3 class="text-sm font-semibold text-white mb-3">Modifica scadenza per <span id="expiry-username" class="text-indigo-400"></span></h3>
+      <label class="flex items-center gap-2 text-xs font-medium text-slate-400 mb-2">
+        <input type="checkbox" id="expiry-infinite-checkbox" class="rounded border-slate-600 bg-slate-950">
+        Durata infinita (nessuna scadenza)
+      </label>
+      <input type="datetime-local" id="expiry-modal-input"
+             class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm mb-4 disabled:opacity-40 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      <div class="flex gap-2 justify-end">
+        <button onclick="closeModal('expiry-modal')" class="px-3 py-1.5 rounded-lg text-xs border border-slate-700 hover:bg-slate-800">Annulla</button>
+        <button id="expiry-confirm-btn" class="px-3 py-1.5 rounded-lg text-xs bg-indigo-500 hover:bg-indigo-400 font-semibold">Conferma</button>
       </div>
     </div>
   </div>

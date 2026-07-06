@@ -14,6 +14,22 @@ function statusBadge(user) {
   return `<span class="badge-pill bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">✅ Attivo</span>`;
 }
 
+// expiry_date e' salvata come "YYYY-MM-DDTHH:MM" (data e ora); qui la
+// mostriamo in formato leggibile "GG/MM/AAAA HH:MM".
+function formatExpiry(expiryDate) {
+  if (!expiryDate) return "Infinita";
+  const [datePart, timePart] = expiryDate.split("T");
+  const [y, m, d] = datePart.split("-");
+  return `${d}/${m}/${y}${timePart ? " " + timePart : ""}`;
+}
+
+function randomPassword() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
+  let pw = "";
+  for (let i = 0; i < 14; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  return pw;
+}
+
 async function loadUsers() {
   const { users } = await apiGet("/api/users");
   const tbody = document.getElementById("users-tbody");
@@ -33,7 +49,7 @@ async function loadUsers() {
         <a href="/permissions/${encodeURIComponent(u.username)}" class="font-medium text-indigo-400 hover:text-indigo-300">${escapeHtml(u.username)}</a>
       </td>
       <td class="px-5 py-3">${statusBadge(u)}</td>
-      <td class="px-5 py-3 text-slate-400">${u.expiry_date ? escapeHtml(u.expiry_date) : "Infinita"}</td>
+      <td class="px-5 py-3 text-slate-400">${formatExpiry(u.expiry_date)}</td>
       <td class="px-5 py-3">
         <div class="flex items-center justify-end gap-1.5">
           <a href="/permissions/${encodeURIComponent(u.username)}" title="Gestisci permessi"
@@ -42,6 +58,10 @@ async function loadUsers() {
              class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-700 hover:bg-slate-800">${u.suspended ? "▶️" : "⏸️"}</button>
           <button title="Reset password" data-action="reset" data-username="${escapeHtml(u.username)}"
              class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-700 hover:bg-slate-800">🔄</button>
+          <button title="Modifica scadenza" data-action="edit-expiry" data-username="${escapeHtml(u.username)}" data-expiry="${escapeHtml(u.expiry_date || '')}"
+             class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-700 hover:bg-slate-800">📅</button>
+          <button title="Copia utente (clona permessi)" data-action="clone" data-username="${escapeHtml(u.username)}"
+             class="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-700 hover:bg-slate-800">📋</button>
           <button title="Elimina definitivamente" data-action="delete" data-username="${escapeHtml(u.username)}"
              class="w-8 h-8 flex items-center justify-center rounded-lg border border-rose-800/60 text-rose-400 hover:bg-rose-900/40">🗑️</button>
         </div>
@@ -98,10 +118,7 @@ document.getElementById("infinite-checkbox").addEventListener("change", (e) => {
 });
 
 document.getElementById("gen-password-btn").addEventListener("click", () => {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%";
-  let pw = "";
-  for (let i = 0; i < 14; i++) pw += chars[Math.floor(Math.random() * chars.length)];
-  document.getElementById("new-password").value = pw;
+  document.getElementById("new-password").value = randomPassword();
 });
 
 document.getElementById("create-user-form").addEventListener("submit", async (e) => {
@@ -157,6 +174,76 @@ document.getElementById("users-tbody").addEventListener("click", async (e) => {
     document.getElementById("delete-username").textContent = username;
     openModal("delete-modal");
   }
+
+  if (action === "edit-expiry") {
+    pendingUsername = username;
+    const currentExpiry = btn.dataset.expiry || "";
+    document.getElementById("expiry-username").textContent = username;
+    const infiniteCb = document.getElementById("expiry-infinite-checkbox");
+    const input = document.getElementById("expiry-modal-input");
+    infiniteCb.checked = !currentExpiry;
+    input.disabled = !currentExpiry;
+    input.value = currentExpiry;
+    openModal("expiry-modal");
+  }
+
+  if (action === "clone") {
+    pendingUsername = username;
+    document.getElementById("clone-source-username").textContent = username;
+    document.getElementById("clone-username-input").value = "";
+    document.getElementById("clone-password-input").value = randomPassword();
+    document.getElementById("clone-infinite-checkbox").checked = true;
+    document.getElementById("clone-expiry-input").disabled = true;
+    document.getElementById("clone-expiry-input").value = "";
+    openModal("clone-modal");
+  }
+});
+
+document.getElementById("expiry-infinite-checkbox").addEventListener("change", (e) => {
+  document.getElementById("expiry-modal-input").disabled = e.target.checked;
+});
+
+document.getElementById("expiry-confirm-btn").addEventListener("click", async () => {
+  const infinite = document.getElementById("expiry-infinite-checkbox").checked;
+  const expiryValue = document.getElementById("expiry-modal-input").value;
+  if (!infinite && !expiryValue) { toast("Seleziona una data e ora di scadenza.", "error"); return; }
+  try {
+    await apiPost(`/api/users/${encodeURIComponent(pendingUsername)}/expiry`, {
+      infinite, expiry_date: infinite ? null : expiryValue,
+    });
+    toast(`Scadenza aggiornata per "${pendingUsername}".`, "success");
+    closeModal("expiry-modal");
+    await loadUsers();
+    await loadAudit();
+  } catch (err) { toast(err.message, "error"); }
+});
+
+document.getElementById("clone-gen-password-btn").addEventListener("click", () => {
+  document.getElementById("clone-password-input").value = randomPassword();
+});
+
+document.getElementById("clone-infinite-checkbox").addEventListener("change", (e) => {
+  document.getElementById("clone-expiry-input").disabled = e.target.checked;
+});
+
+document.getElementById("clone-confirm-btn").addEventListener("click", async () => {
+  const newUsername = document.getElementById("clone-username-input").value.trim().toLowerCase();
+  const password = document.getElementById("clone-password-input").value;
+  const infinite = document.getElementById("clone-infinite-checkbox").checked;
+  const expiryValue = document.getElementById("clone-expiry-input").value;
+  if (!newUsername) { toast("Inserisci un username per il nuovo utente.", "error"); return; }
+  if (password.length < 8) { toast("La password deve avere almeno 8 caratteri.", "error"); return; }
+  if (!infinite && !expiryValue) { toast("Seleziona una data e ora di scadenza, oppure spunta 'durata infinita'.", "error"); return; }
+  try {
+    const result = await apiPost(`/api/users/${encodeURIComponent(pendingUsername)}/clone`, {
+      new_username: newUsername, password, infinite,
+      expiry_date: infinite ? null : expiryValue,
+    });
+    toast(`Utente "${newUsername}" creato con ${result.copied_permissions} assegnazione/i copiate da "${pendingUsername}".`, "success");
+    closeModal("clone-modal");
+    await loadUsers();
+    await loadAudit();
+  } catch (err) { toast(err.message, "error"); }
 });
 
 document.getElementById("reset-confirm-btn").addEventListener("click", async () => {

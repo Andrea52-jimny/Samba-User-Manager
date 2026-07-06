@@ -36,7 +36,10 @@ DEFAULT_ADMIN_USERNAME = os.environ.get("ADMIN_USERNAME", "admin")
 DEFAULT_ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "ChangeMe123!")
 
 # --- Controllo scadenze account (thread di background) -----------------------
-EXPIRY_CHECK_INTERVAL_SECONDS = int(os.environ.get("EXPIRY_CHECK_INTERVAL_SECONDS", "300"))
+# La scadenza ora ha granularita' data+ora (vedi selettore datetime in UI):
+# un intervallo piu' breve del precedente (300s) riduce il ritardo massimo
+# fra l'orario di scadenza impostato e la sospensione automatica effettiva.
+EXPIRY_CHECK_INTERVAL_SECONDS = int(os.environ.get("EXPIRY_CHECK_INTERVAL_SECONDS", "60"))
 
 # --- Persistenza utenti/gruppi Linux in ambiente Docker -----------------------
 # Se valorizzata (solo nel container Docker, vedi docker-compose.yml), dopo

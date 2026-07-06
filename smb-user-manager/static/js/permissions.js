@@ -159,8 +159,14 @@ async function selectPath(path) {
   try {
     const perm = await apiGet(`/api/permissions/${encodeURIComponent(TARGET_USERNAME)}?path=${encodeURIComponent(path)}`);
     document.getElementById("perm-read").checked = perm.read;
-    document.getElementById("perm-write").checked = perm.write;
-    document.getElementById("perm-delete").checked = perm.delete;
+    // "Modifica" ed "Eliminazione" sono un unico controllo in UI (vedi nota
+    // in permissions.html): il bit reale di scrittura su una cartella
+    // implica sempre anche la possibilita' di cancellare, quindi si mostra
+    // "attivo" se ALMENO uno dei due era stato salvato (dati storici prima
+    // di questa unificazione potrebbero averli distinti).
+    const writeOrDelete = perm.write || perm.delete;
+    document.getElementById("perm-write").checked = writeOrDelete;
+    document.getElementById("perm-delete").checked = writeOrDelete;
     syncSelectAllCheckbox();
 
     const note = document.getElementById("inherited-note");
@@ -178,9 +184,15 @@ async function selectPath(path) {
 function syncSelectAllCheckbox() {
   const r = document.getElementById("perm-read").checked;
   const w = document.getElementById("perm-write").checked;
-  const d = document.getElementById("perm-delete").checked;
-  document.getElementById("perm-select-all").checked = r && w && d;
+  document.getElementById("perm-select-all").checked = r && w;
 }
+
+// "Modifica" governa anche "Eliminazione" (nascosto in UI, vedi nota in
+// permissions.html): tenerli sempre sincronizzati quando l'utente clicca
+// direttamente la checkbox "Modifica".
+document.getElementById("perm-write").addEventListener("change", (e) => {
+  document.getElementById("perm-delete").checked = e.target.checked;
+});
 
 async function selectAllSubfolders() {
   if (selectedPath === null) return;

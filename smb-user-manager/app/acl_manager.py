@@ -338,6 +338,24 @@ def list_all_permissions_for_user(username: str) -> list:
     return [dict(r) for r in rows]
 
 
+def clone_permissions(source_username: str, target_username: str) -> int:
+    """Copia TUTTE le assegnazioni esplicite (ACL reali sul filesystem + le
+    corrispondenti righe DB, compresa la modalita' ricorsivo/solo-qui) da
+    source_username a target_username. Usato dalla funzione "Copia utente"
+    della dashboard. Ritorna il numero di assegnazioni copiate."""
+    assignments = list_all_permissions_for_user(source_username)
+    copied = 0
+    for row in assignments:
+        read, write, delete = bool(row["can_read"]), bool(row["can_write"]), bool(row["can_delete"])
+        recursive = bool(row["recursive"])
+        try:
+            apply_permissions(target_username, row["path"], read, write, delete, recursive=recursive)
+            copied += 1
+        except AclError:
+            continue
+    return copied
+
+
 def check_zfs_acl_support() -> Optional[str]:
     """Controllo diagnostico best-effort: su ZFS le ACL POSIX funzionano
     solo se il dataset ha 'acltype=posixacl'. Ritorna un messaggio di

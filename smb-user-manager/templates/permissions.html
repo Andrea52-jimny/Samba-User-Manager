@@ -59,24 +59,31 @@
         <p id="inherited-note" class="hidden text-xs text-amber-400 mb-4"></p>
 
         <label class="flex items-center justify-between gap-3 bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer mb-3">
-          <span class="text-xs font-semibold">☑ Seleziona tutto (R+W+D)</span>
+          <span class="text-xs font-semibold">☑ Seleziona tutto</span>
           <input type="checkbox" id="perm-select-all" class="w-4 h-4 rounded border-slate-600">
         </label>
 
-        <div class="space-y-3 mb-5">
+        <div class="space-y-3 mb-2">
           <label class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 cursor-pointer">
             <span class="text-sm">📖 Lettura (Read)</span>
             <input type="checkbox" id="perm-read" class="w-4 h-4 rounded border-slate-600">
           </label>
           <label class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 cursor-pointer">
-            <span class="text-sm">✏️ Modifica (Write)</span>
+            <span class="text-sm">✏️ Modifica (scrittura + eliminazione)</span>
             <input type="checkbox" id="perm-write" class="w-4 h-4 rounded border-slate-600">
           </label>
-          <label class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 cursor-pointer">
-            <span class="text-sm">🗑️ Eliminazione (Delete)</span>
-            <input type="checkbox" id="perm-delete" class="w-4 h-4 rounded border-slate-600">
-          </label>
+          <!-- 'Eliminazione' non e' un permesso POSIX separabile da 'Modifica': su Linux/Samba
+               la possibilita' di cancellare un file dipende SOLO dal bit di scrittura della
+               cartella che lo contiene, mai da un bit sul singolo file. Chi puo' scrivere puo'
+               sempre anche cancellare: per questo il controllo e' unico e non un'illusione di
+               separazione che il filesystem non applicherebbe comunque. Il checkbox resta nel
+               DOM (nascosto) solo per compatibilita' con l'API, sempre sincronizzato con "Modifica". -->
+          <input type="checkbox" id="perm-delete" class="hidden">
         </div>
+        <p class="text-[11px] text-slate-500 mb-5 leading-relaxed">
+          "Modifica" e "Eliminazione" sono un unico permesso: su Linux/Samba chi puo' scrivere in una cartella
+          puo' sempre anche cancellare i file al suo interno (regola del filesystem, non modificabile via ACL).
+        </p>
 
         <div class="grid grid-cols-2 gap-2">
           <button id="apply-recursive-btn" disabled

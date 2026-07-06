@@ -172,11 +172,23 @@ def disable_samba_user(username: str):
         _sync_user_db_to_persist()
 
 
-def set_account_expiry(username: str, expiry_date: Optional[str]):
-    """expiry_date: stringa 'YYYY-MM-DD' oppure None per durata infinita."""
+def set_account_expiry(username: str, expiry_value: Optional[str]):
+    """expiry_value: stringa 'YYYY-MM-DDTHH:MM' (data e ora) oppure None per
+    durata infinita.
+
+    NOTA: /etc/shadow (e quindi 'chage -E') ha granularita' di un GIORNO
+    intero, non supporta un orario preciso: e' un limite del formato stesso,
+    non di questa applicazione. Per questo 'chage' viene comunque impostato
+    come difesa aggiuntiva a livello di sistema operativo (usando solo la
+    parte di DATA, arrotondata al giorno), ma il taglio preciso all'ORARIO
+    esatto e' applicato dal thread di sospensione automatica dell'app
+    (vedi main.py: _check_expired_accounts), che confronta l'orario corrente
+    con l'intero valore data+ora salvato nel database.
+    """
     try:
-        if expiry_date:
-            _run(["chage", "-E", expiry_date, username])
+        if expiry_value:
+            date_part = expiry_value.split("T")[0]
+            _run(["chage", "-E", date_part, username])
         else:
             _run(["chage", "-E", "-1", username])
     finally:

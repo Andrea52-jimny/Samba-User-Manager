@@ -123,6 +123,22 @@ def _delete_db_permission(username: str, relpath: str):
         )
 
 
+def _lock_down_other(target: Path, flags: list):
+    """Toglie l'accesso implicito alla classe Unix 'other' (chmod o-rwx) e
+    imposta 'other::0' anche nell'ACL di default per le nuove voci create in
+    futuro dentro la cartella.
+
+    Necessario perche' le ACL gestite qui si AGGIUNGONO ai permessi POSIX di
+    base, non li sostituiscono: se una cartella ha ancora bit 'other' aperti
+    (es. rwxr-xr-x, comune per cartelle create/copiate fuori dall'app), un
+    utente Samba SENZA alcuna ACL esplicita ci accede comunque, perche' per
+    il kernel ricade nella classe 'altri'. Il controllo di accesso deve
+    dipendere SOLO dalle assegnazioni esplicite gestite dall'app.
+    """
+    _run(["chmod", *flags, "o-rwx", str(target)], check=False)
+    _run(["setfacl", *flags, "-d", "-m", "other::0", str(target)], check=False)
+
+
 def apply_permissions(username: str, relpath: str, read: bool, write: bool, delete: bool, recursive: bool = True) -> dict:
     if not any([read, write, delete]):
         return remove_permissions(username, relpath, recursive=recursive)
@@ -130,6 +146,8 @@ def apply_permissions(username: str, relpath: str, read: bool, write: bool, dele
     target = abs_path(relpath)
     perm = build_perm_string(read, write, delete)
     flags = ["-R"] if recursive else []
+
+    _lock_down_other(target, flags)
 
     _run(["setfacl", *flags, "-m", f"u:{username}:{perm}", str(target)])
     # ACL di default: valida solo sulle directory, applicata automaticamente

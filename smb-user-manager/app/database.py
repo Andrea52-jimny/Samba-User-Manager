@@ -70,6 +70,13 @@ CREATE TABLE IF NOT EXISTS permissions (
     can_read INTEGER NOT NULL DEFAULT 0,
     can_write INTEGER NOT NULL DEFAULT 0,
     can_delete INTEGER NOT NULL DEFAULT 0,
+    -- Indica se l'assegnazione e' stata applicata in modalita' ricorsiva
+    -- (si propaga davvero, sul filesystem, a tutte le sottocartelle) oppure
+    -- "solo qui" (vale SOLO per questa cartella, non tocca il contenuto
+    -- gia' esistente delle sottocartelle). Serve a get_effective_permission
+    -- per non mostrare come "ereditato" un permesso che in realta' non e'
+    -- mai stato applicato al di sotto di questo livello.
+    recursive INTEGER NOT NULL DEFAULT 1,
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(username, path)
 );
@@ -88,7 +95,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
 def init_db():
     conn = get_connection()
     conn.executescript(SCHEMA)
+    _migrate(conn)
     conn.commit()
+
+
+def _migrate(conn: sqlite3.Connection):
+    """Migrazioni leggere per DB creati con versioni precedenti dello
+    schema (CREATE TABLE IF NOT EXISTS non aggiunge colonne mancanti a
+    tabelle gia' esistenti)."""
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(permissions)").fetchall()}
+    if "recursive" not in cols:
+        conn.execute("ALTER TABLE permissions ADD COLUMN recursive INTEGER NOT NULL DEFAULT 1")
 
 
 def log_action(admin_username: str, action: str, target: str = "", details: str = ""):

@@ -28,9 +28,25 @@
 
     <!-- Albero cartelle -->
     <section class="lg:col-span-3 bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center justify-between mb-2">
         <h2 class="text-sm font-semibold text-white">📁 Struttura cartelle (scansione dal vivo)</h2>
         <button id="refresh-tree-btn" title="Ricarica dal disco" class="text-xs px-2.5 py-1 rounded-lg border border-slate-700 hover:bg-slate-800">🔄 Aggiorna</button>
+      </div>
+      <div class="flex items-center justify-between mb-4 gap-2 flex-wrap">
+        <p class="text-[11px] text-slate-500">
+          Spunta le caselle per selezionare piu' cartelle insieme (l'azione si applichera' a tutte).
+          <span id="multi-select-count" class="hidden text-indigo-400 font-semibold"></span>
+        </p>
+        <div class="flex gap-2">
+          <button id="select-children-btn" disabled title="Seleziona tutte le sottocartelle della cartella attiva"
+                  class="text-[11px] px-2.5 py-1 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-40 text-slate-300">
+            ☑ Seleziona sottocartelle
+          </button>
+          <button id="clear-selection-btn" disabled
+                  class="text-[11px] px-2.5 py-1 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-40 text-slate-300">
+            ✕ Deseleziona tutto
+          </button>
+        </div>
       </div>
       <div id="tree-root" class="text-sm max-h-[65vh] overflow-y-auto scrollbar-thin pr-1"></div>
     </section>
@@ -41,6 +57,11 @@
         <h2 class="text-sm font-semibold text-white mb-1">Permessi selezionati</h2>
         <p id="selected-path" class="text-xs text-indigo-400 mb-4 break-all">Nessuna cartella selezionata</p>
         <p id="inherited-note" class="hidden text-xs text-amber-400 mb-4"></p>
+
+        <label class="flex items-center justify-between gap-3 bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer mb-3">
+          <span class="text-xs font-semibold">☑ Seleziona tutto (R+W+D)</span>
+          <input type="checkbox" id="perm-select-all" class="w-4 h-4 rounded border-slate-600">
+        </label>
 
         <div class="space-y-3 mb-5">
           <label class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 cursor-pointer">

@@ -95,6 +95,29 @@ def list_children(relpath: str = "") -> list:
     return children
 
 
+def list_all_descendants(relpath: str = "") -> list:
+    """Ritorna, ricorsivamente, TUTTI i percorsi relativi delle sottocartelle
+    di relpath (a qualunque profondita'). Usato dalla UI per la selezione
+    multipla "seleziona tutte le sottocartelle" di una cartella padre, senza
+    dover espandere manualmente ogni nodo dell'albero lazy-loaded."""
+    target = abs_path(relpath)
+    if not target.is_dir():
+        raise AclError(f"'{target}' non e' una cartella valida.")
+
+    results = []
+    for root, dirs, _files in os.walk(target):
+        dirs.sort(key=str.lower)
+        dirs[:] = [d for d in dirs if not os.path.islink(os.path.join(root, d))]
+        for d in dirs:
+            full = Path(root) / d
+            try:
+                rel = full.resolve().relative_to(Path(ROOT_PATH).resolve())
+            except ValueError:
+                continue
+            results.append(str(rel).replace(os.sep, "/"))
+    return sorted(results)
+
+
 def build_perm_string(read: bool, write: bool, delete: bool) -> str:
     r = "r" if read else "-"
     w = "w" if (write or delete) else "-"
@@ -102,17 +125,18 @@ def build_perm_string(read: bool, write: bool, delete: bool) -> str:
     return f"{r}{w}{x}"
 
 
-def _upsert_db_permission(username: str, relpath: str, read: bool, write: bool, delete: bool):
+def _upsert_db_permission(username: str, relpath: str, read: bool, write: bool, delete: bool, recursive: bool = True):
     with db_cursor(commit=True) as cur:
         cur.execute(
-            """INSERT INTO permissions (username, path, can_read, can_write, can_delete, updated_at)
-               VALUES (?, ?, ?, ?, ?, datetime('now'))
+            """INSERT INTO permissions (username, path, can_read, can_write, can_delete, recursive, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
                ON CONFLICT(username, path) DO UPDATE SET
                  can_read=excluded.can_read,
                  can_write=excluded.can_write,
                  can_delete=excluded.can_delete,
+                 recursive=excluded.recursive,
                  updated_at=datetime('now')""",
-            (username, relpath, int(read), int(write), int(delete)),
+            (username, relpath, int(read), int(write), int(delete), int(recursive)),
         )
 
 
@@ -195,7 +219,7 @@ def apply_permissions(username: str, relpath: str, read: bool, write: bool, dele
         # risalire erroneamente al genitore.
         _run(["setfacl", *flags, "-x", f"u:{username}", str(target)], check=False)
         _run(["setfacl", *flags, "-d", "-x", f"u:{username}", str(target)], check=False)
-        _upsert_db_permission(username, relpath, False, False, False)
+        _upsert_db_permission(username, relpath, False, False, False, recursive)
         samba_manager.disconnect_user_sessions(username)
         return {"path": relpath, "read": False, "write": False, "delete": False, "recursive": recursive}
 
@@ -205,7 +229,7 @@ def apply_permissions(username: str, relpath: str, read: bool, write: bool, dele
     # solo dove ha senso anche in modalita' ricorsiva.
     _run(["setfacl", *flags, "-d", "-m", f"u:{username}:{perm}", str(target)], check=False)
 
-    _upsert_db_permission(username, relpath, read, write, delete)
+    _upsert_db_permission(username, relpath, read, write, delete, recursive)
     # Forza la riconnessione: un client Windows/macOS gia' connesso puo'
     # avere in cache locale (oplock/directory cache di Explorer) il listato
     # o il contenuto di file letti PRIMA della modifica, e continuare a
@@ -264,31 +288,42 @@ def restore_all_filesystem_acls_for_user(username: str):
         except AclError:
             continue
         perm = build_perm_string(read, write, delete)
-        subprocess.run(["setfacl", "-R", "-m", f"u:{username}:{perm}", str(target)], capture_output=True, text=True)
-        subprocess.run(["setfacl", "-R", "-d", "-m", f"u:{username}:{perm}", str(target)], capture_output=True, text=True)
+        flags = ["-R"] if bool(row["recursive"]) else []
+        subprocess.run(["setfacl", *flags, "-m", f"u:{username}:{perm}", str(target)], capture_output=True, text=True)
+        subprocess.run(["setfacl", *flags, "-d", "-m", f"u:{username}:{perm}", str(target)], capture_output=True, text=True)
 
 
 def get_effective_permission(username: str, relpath: str) -> dict:
     """Risale dal path richiesto verso la root cercando la prima
     assegnazione esplicita in DB (il piu' vicino/specifico vince =
-    logica di override sulle sottocartelle)."""
+    logica di override sulle sottocartelle).
+
+    IMPORTANTE: un'assegnazione fatta con "Applica (solo qui)" (recursive=0)
+    NON si propaga davvero sul filesystem alle sottocartelle esistenti (solo
+    setfacl -R lo fa). Per questo, quando si risale verso un ANTENATO (non il
+    percorso esatto richiesto), un'assegnazione con recursive=0 viene
+    ignorata e la ricerca prosegue piu' in alto: mostrarla come "ereditata"
+    sarebbe fuorviante, perche' quella sottocartella in realta' non ha
+    ricevuto alcun accesso reale da quell'antenato. Sul percorso ESATTO
+    richiesto, invece, la propria riga vale sempre, ricorsiva o no."""
     safe = sanitize_relpath(relpath)
     segments = safe.split("/") if safe else []
 
     with db_cursor() as cur:
         for i in range(len(segments), -1, -1):
             candidate_path = "/".join(segments[:i])
+            is_exact = candidate_path == safe
             cur.execute(
-                "SELECT path, can_read, can_write, can_delete FROM permissions WHERE username = ? AND path = ?",
+                "SELECT path, can_read, can_write, can_delete, recursive FROM permissions WHERE username = ? AND path = ?",
                 (username, candidate_path),
             )
             row = cur.fetchone()
-            if row:
+            if row and (is_exact or bool(row["recursive"])):
                 return {
                     "read": bool(row["can_read"]),
                     "write": bool(row["can_write"]),
                     "delete": bool(row["can_delete"]),
-                    "inherited_from": candidate_path if candidate_path != safe else None,
+                    "inherited_from": None if is_exact else candidate_path,
                 }
     return {"read": False, "write": False, "delete": False, "inherited_from": None}
 
@@ -296,7 +331,7 @@ def get_effective_permission(username: str, relpath: str) -> dict:
 def list_all_permissions_for_user(username: str) -> list:
     with db_cursor() as cur:
         cur.execute(
-            "SELECT path, can_read, can_write, can_delete, updated_at FROM permissions WHERE username = ? ORDER BY path",
+            "SELECT path, can_read, can_write, can_delete, recursive, updated_at FROM permissions WHERE username = ? ORDER BY path",
             (username,),
         )
         rows = cur.fetchall()

@@ -341,6 +341,18 @@ def api_tree(path: str = "", admin: str = Depends(require_admin_api)):
     return {"path": path, "children": children}
 
 
+@app.get("/api/tree/descendants")
+def api_tree_descendants(path: str = "", admin: str = Depends(require_admin_api)):
+    """Usato dalla UI per 'Seleziona tutte le sottocartelle': ritorna in un
+    colpo solo tutti i percorsi ricorsivi sotto 'path', senza dover espandere
+    manualmente ogni nodo dell'albero lazy-loaded."""
+    try:
+        descendants = acl_manager.list_all_descendants(path)
+    except acl_manager.AclError as exc:
+        raise HTTPException(400, str(exc))
+    return {"path": path, "descendants": descendants}
+
+
 @app.get("/api/permissions/{username}")
 def api_get_permission(username: str, path: str = "", admin: str = Depends(require_admin_api)):
     _assert_user_exists(username)

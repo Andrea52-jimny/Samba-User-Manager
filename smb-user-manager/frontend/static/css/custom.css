@@ -1,0 +1,73 @@
+/* Stile complementare a Tailwind (CDN) per l'albero cartelle e piccoli dettagli
+   non facilmente esprimibili con sole utility class. */
+
+.tree-node {
+  position: relative;
+}
+
+.tree-children {
+  margin-left: 1.15rem;
+  border-left: 1px solid rgba(148, 163, 184, 0.25);
+  padding-left: 0.65rem;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 120ms ease;
+}
+
+.tree-row:hover {
+  background-color: rgba(99, 102, 241, 0.12);
+}
+
+.tree-row.selected {
+  background-color: rgba(99, 102, 241, 0.28);
+  outline: 1px solid rgba(129, 140, 248, 0.6);
+}
+
+.tree-caret {
+  display: inline-flex;
+  width: 1rem;
+  justify-content: center;
+  transition: transform 150ms ease;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.tree-caret.expanded {
+  transform: rotate(90deg);
+}
+
+.badge-pill {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.toast-enter {
+  animation: toast-in 180ms ease-out;
+}

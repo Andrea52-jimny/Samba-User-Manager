@@ -10,7 +10,7 @@ services:
     # di capabilities (cap_add), ma va testato caso per caso.
     privileged: true
     ports:
-      - "8000:8000"   # Web UI / API
+      - "80:8000"   # Web UI / API
       - "445:445"     # SMB
       # "139:139"     # NetBIOS: DISATTIVATO di default, va quasi sempre in
       # conflitto con nmbd nativo ancora in ascolto sull'host/container LXC.

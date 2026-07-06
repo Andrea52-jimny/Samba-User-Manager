@@ -17,7 +17,9 @@ Tutti i comandi vengono eseguiti con subprocess usando liste di argomenti
 (NON shell=True), quindi non sono soggetti a shell injection: ogni parametro
 e' passato come argomento separato al processo figlio.
 """
+import os
 import shutil
+import signal
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -119,6 +121,35 @@ def set_samba_password(username: str, password: str, new_user: bool = False):
         _run(args, input_data=stdin_payload)
     finally:
         _sync_user_db_to_persist()
+
+
+def disconnect_user_sessions(username: str):
+    """Termina IMMEDIATAMENTE ogni sessione SMB gia' stabilita per l'utente.
+
+    Disabilitare la password (smbpasswd -d) o eliminare l'utente blocca solo
+    i NUOVI login: un client Windows/macOS gia' connesso mantiene la propria
+    sessione aperta (con relativo smbd figlio dedicato) finche' non si
+    disconnette da solo, e continua a leggere/scrivere/cancellare file anche
+    dopo la sospensione/eliminazione. Per questo va chiusa a forza la
+    connessione esistente, individuando il PID del processo smbd figlio
+    dedicato a quell'utente (via 'smbstatus -b') e terminandolo.
+    """
+    try:
+        result = subprocess.run(
+            ["smbstatus", "-b"], capture_output=True, text=True, timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        # Formato riga: PID  Username  Group  Machine  ...
+        if len(parts) >= 2 and parts[0].isdigit() and parts[1] == username:
+            try:
+                os.kill(int(parts[0]), signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                pass
 
 
 def enable_samba_user(username: str):

@@ -236,6 +236,13 @@ def api_suspend_user(username: str, admin: str = Depends(require_admin_api)):
         samba_manager.disable_samba_user(username)
     except samba_manager.SambaCommandError as exc:
         raise HTTPException(500, str(exc))
+    # Toglie subito l'accesso effettivo sul filesystem (le assegnazioni
+    # restano salvate in DB per il ripristino al resume) e chiude a forza
+    # eventuali connessioni SMB gia' stabilite: altrimenti un client gia'
+    # connesso continuerebbe a leggere/scrivere/cancellare file nonostante
+    # la sospensione dell'account.
+    acl_manager.revoke_all_filesystem_acls_for_user(username)
+    samba_manager.disconnect_user_sessions(username)
     with db_cursor(commit=True) as cur:
         cur.execute("UPDATE users SET suspended = 1 WHERE username = ?", (username,))
     log_action(admin, "suspend-user", username)
@@ -249,6 +256,9 @@ def api_resume_user(username: str, admin: str = Depends(require_admin_api)):
         samba_manager.enable_samba_user(username)
     except samba_manager.SambaCommandError as exc:
         raise HTTPException(500, str(exc))
+    # Ripristina sul filesystem le assegnazioni granulari salvate in DB,
+    # tolte dal disco (non dal DB) al momento della sospensione.
+    acl_manager.restore_all_filesystem_acls_for_user(username)
     with db_cursor(commit=True) as cur:
         cur.execute("UPDATE users SET suspended = 0 WHERE username = ?", (username,))
     log_action(admin, "resume-user", username)
@@ -287,6 +297,10 @@ def api_set_expiry(username: str, payload: dict = Body(...), admin: str = Depend
 @app.delete("/api/users/{username}")
 def api_delete_user(username: str, admin: str = Depends(require_admin_api)):
     _assert_user_exists(username)
+    # Chiude subito eventuali connessioni SMB gia' stabilite: altrimenti un
+    # client gia' connesso continuerebbe a operare sui file anche dopo che
+    # l'utente e' stato eliminato da Samba/Linux.
+    samba_manager.disconnect_user_sessions(username)
     try:
         samba_manager.delete_user_completely(username)
     except Exception as exc:

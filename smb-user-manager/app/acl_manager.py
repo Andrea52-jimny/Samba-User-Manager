@@ -158,6 +158,33 @@ def remove_all_permissions_for_user(username: str):
         cur.execute("DELETE FROM permissions WHERE username = ?", (username,))
 
 
+def revoke_all_filesystem_acls_for_user(username: str):
+    """Usato in SOSPENSIONE: toglie subito ogni accesso effettivo sul
+    filesystem (setfacl -x su tutto l'albero), ma NON tocca le righe nel DB,
+    cosi' che le assegnazioni granulari restino salvate e possano essere
+    ripristinate automaticamente al momento della riattivazione (resume)."""
+    root = Path(ROOT_PATH).resolve()
+    subprocess.run(["setfacl", "-R", "-x", f"u:{username}", str(root)], capture_output=True, text=True)
+    subprocess.run(["setfacl", "-R", "-d", "-x", f"u:{username}", str(root)], capture_output=True, text=True)
+
+
+def restore_all_filesystem_acls_for_user(username: str):
+    """Usato in RIATTIVAZIONE (resume): riapplica su disco tutte le
+    assegnazioni ancora presenti in DB per l'utente (rimosse dal filesystem,
+    ma non dal DB, al momento della sospensione)."""
+    for row in list_all_permissions_for_user(username):
+        read, write, delete = bool(row["can_read"]), bool(row["can_write"]), bool(row["can_delete"])
+        if not any([read, write, delete]):
+            continue
+        try:
+            target = abs_path(row["path"])
+        except AclError:
+            continue
+        perm = build_perm_string(read, write, delete)
+        subprocess.run(["setfacl", "-R", "-m", f"u:{username}:{perm}", str(target)], capture_output=True, text=True)
+        subprocess.run(["setfacl", "-R", "-d", "-m", f"u:{username}:{perm}", str(target)], capture_output=True, text=True)
+
+
 def get_effective_permission(username: str, relpath: str) -> dict:
     """Risale dal path richiesto verso la root cercando la prima
     assegnazione esplicita in DB (il piu' vicino/specifico vince =

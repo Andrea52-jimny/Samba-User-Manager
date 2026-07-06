@@ -14,7 +14,11 @@ services:
     ports:
       - "8000:8000"   # Web UI / API
       - "445:445"     # SMB
-      - "139:139"     # NetBIOS (opzionale, solo client molto datati)
+      # "139:139"     # NetBIOS: DISATTIVATO di default, va quasi sempre in
+      # conflitto con nmbd nativo ancora in ascolto sull'host/container LXC.
+      # Riattivalo solo se ti servono client Windows molto vecchi (XP/2003),
+      # e solo DOPO aver fermato il servizio nativo che occupa la porta 139
+      # (vedi comando diagnostico nel README).
     volumes:
       # --- Dati NAS reali: bind mount dal dataset ZFS dell'host ---
       # Deve essere lo stesso path che poi appare come "path" in smb.conf.

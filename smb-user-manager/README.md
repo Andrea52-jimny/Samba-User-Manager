@@ -131,9 +131,30 @@ puo' provare un set mirato di `cap_add` (es. `CAP_DAC_READ_SEARCH`,
 
 ### Porte
 
-`8000` (Web UI), `445` (SMB), `139` (NetBIOS, opzionale). Per usare la porta
-`80` per la UI, cambia `"8000:8000"` in `"80:8000"` in `docker-compose.yml`
-(non serve toccare nulla dentro il container).
+`8000` (Web UI), `445` (SMB). Per usare la porta `80` per la UI, cambia
+`"8000:8000"` in `"80:8000"` in `docker-compose.yml` (non serve toccare
+nulla dentro il container).
+
+Il mapping della porta `139` (NetBIOS) e' commentato di default nel
+`docker-compose.yml`: se il container LXC ha ancora `nmbd`/`smbd` nativi in
+esecuzione (installati prima di passare a Docker), vanno in conflitto con
+quelli dentro il container Docker e il `docker compose up` fallisce con
+`address already in use`. Per capire cosa occupa una porta sul container/host:
+
+```bash
+ss -tulpn | grep -E ':139|:445|:8000'
+```
+
+Se risulta `smbd`/`nmbd` nativo, e hai deciso di usare Docker come unica
+fonte di verita' per Samba, disattivalo definitivamente:
+
+```bash
+systemctl disable --now smbd nmbd
+```
+
+Solo dopo aver liberato la porta ha senso riattivare `"139:139"` in
+`docker-compose.yml` (serve solo per client Windows molto vecchi tipo
+XP/2003; i client moderni usano esclusivamente la 445).
 
 ### Nota sul dataset ZFS (host)
 

@@ -124,19 +124,37 @@ def _delete_db_permission(username: str, relpath: str):
 
 
 def _lock_down_other(target: Path, flags: list):
-    """Toglie l'accesso implicito alla classe Unix 'other' (chmod o-rwx) e
-    imposta 'other::0' anche nell'ACL di default per le nuove voci create in
-    futuro dentro la cartella.
+    """Toglie l'accesso implicito alle classi Unix 'group' e 'other'
+    (chmod go-rwx) e imposta 'group::0'/'other::0' anche nell'ACL di
+    default, cosi' che le nuove voci create in futuro dentro la cartella
+    ereditino la stessa chiusura.
 
     Necessario perche' le ACL gestite qui si AGGIUNGONO ai permessi POSIX di
-    base, non li sostituiscono: se una cartella ha ancora bit 'other' aperti
-    (es. rwxr-xr-x, comune per cartelle create/copiate fuori dall'app), un
-    utente Samba SENZA alcuna ACL esplicita ci accede comunque, perche' per
-    il kernel ricade nella classe 'altri'. Il controllo di accesso deve
-    dipendere SOLO dalle assegnazioni esplicite gestite dall'app.
+    base, non li sostituiscono:
+      - bit 'other' aperti (es. rwxr-xr-x) fanno accedere chiunque, anche
+        senza alcuna ACL esplicita, perche' ricade nella classe 'altri';
+      - bit 'group' aperti sono ANCORA PIU' insidiosi qui, perche' TUTTI gli
+        utenti creati dall'app condividono lo stesso gruppo primario Linux
+        (SAMBA_GROUP/smbgroup): se una cartella e' posseduta proprio da quel
+        gruppo (capita spesso, es. per coincidenza di GID tra host e
+        container) con bit group rwx, OGNI utente gestito dall'app ci accede
+        automaticamente in quanto membro del gruppo proprietario, a
+        prescindere da qualunque ACL o revoca specifica per quell'utente.
+    Il controllo di accesso deve dipendere SOLO dalle assegnazioni esplicite
+    (ACL per-utente) gestite dall'app, mai dai bit di gruppo/altri di base.
+
+    NOTA TECNICA: qui si usa 'setfacl -m g::0,o::0' e NON 'chmod g-rwx'.
+    Una volta che una cartella ha almeno una voce ACL nominale (es. un
+    permesso gia' assegnato a un utente), 'ls -l'/chmod trattano la colonna
+    "gruppo" come la MASK dell'ACL (il tetto massimo di permesso per le voci
+    nominali), non piu' come il vero proprietario-gruppo: un 'chmod g-rwx'
+    in quel caso azzererebbe la mask e spegnerebbe TUTTE le voci nominali
+    gia' assegnate ad altri utenti su quella cartella. 'setfacl g::'/'o::'
+    invece agiscono sempre sulla voce base proprietario-gruppo/altri, mai
+    sulla mask, quindi non toccano le assegnazioni nominali esistenti.
     """
-    _run(["chmod", *flags, "o-rwx", str(target)], check=False)
-    _run(["setfacl", *flags, "-d", "-m", "other::0", str(target)], check=False)
+    _run(["setfacl", *flags, "-m", "g::0,o::0", str(target)], check=False)
+    _run(["setfacl", *flags, "-d", "-m", "g::0,o::0", str(target)], check=False)
 
 
 def apply_permissions(username: str, relpath: str, read: bool, write: bool, delete: bool, recursive: bool = True) -> dict:

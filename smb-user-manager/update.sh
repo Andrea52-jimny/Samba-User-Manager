@@ -15,18 +15,23 @@ git reset --hard origin/main   # scarta eventuali modifiche locali nel repo
 git pull
 
 echo "==> [2/5] Sincronizzazione file verso ${APP_DIR}"
-# --delete rimuove i file spariti dal repo, ma le exclude proteggono sempre
-# cio' che e' gia' presente in APP_DIR (dati runtime, non presenti nel repo).
-rsync -a --delete \
-  --exclude 'venv/' \
-  --exclude 'data/' \
-  --exclude '*.db' \
-  --exclude '*.db-journal' \
-  --exclude '__pycache__/' \
-  --exclude '*.pyc' \
-  --exclude '.git/' \
-  --exclude '.gitignore' \
-  "${REPO_DIR}/" "${APP_DIR}/"
+# rsync non e' disponibile in questo container: si usa tar per copiare in modo
+# ricorsivo escludendo dati runtime/venv/cache (cp da solo non supporta
+# esclusioni ricorsive). NOTA: a differenza di rsync --delete, i file rimossi
+# dal repo NON vengono rimossi da APP_DIR: restano li' finche' non li elimini
+# a mano (rm) se necessario.
+mkdir -p "${APP_DIR}"
+tar -cf - \
+  --exclude='.git' \
+  --exclude='venv' \
+  --exclude='data' \
+  --exclude='*.db' \
+  --exclude='*.db-journal' \
+  --exclude='__pycache__' \
+  --exclude='*.pyc' \
+  --exclude='.gitignore' \
+  -C "${REPO_DIR}" . \
+  | tar -xf - -C "${APP_DIR}"
 
 echo "==> [3/5] Aggiornamento dipendenze Python"
 cd "${APP_DIR}"

@@ -18,6 +18,7 @@ Tutti i comandi vengono eseguiti con subprocess usando liste di argomenti
 e' passato come argomento separato al processo figlio.
 """
 import os
+import pwd
 import shutil
 import signal
 import subprocess
@@ -86,6 +87,17 @@ def ensure_samba_group():
 def linux_user_exists(username: str) -> bool:
     result = subprocess.run(["id", "-u", username], capture_output=True, text=True)
     return result.returncode == 0
+
+
+def get_uid(username: str) -> Optional[int]:
+    """Ritorna l'UID numerico assegnato da useradd all'utente: lo stesso che
+    compare nelle ACL POSIX (u:<UID>) e che serve per far girare un processo
+    ESTERNO (es. l'upscaler) con i permessi di quell'utente. None se l'utente
+    non esiste a livello di sistema (presente in DB ma non in /etc/passwd)."""
+    try:
+        return pwd.getpwnam(username).pw_uid
+    except KeyError:
+        return None
 
 
 def create_linux_user(username: str):

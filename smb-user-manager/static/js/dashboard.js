@@ -4,6 +4,14 @@
 function closeModal(id) { document.getElementById(id).classList.add("hidden"); }
 function openModal(id) { document.getElementById(id).classList.remove("hidden"); }
 
+function uidCell(user) {
+  if (user.uid === null || user.uid === undefined) {
+    return `<span class="text-slate-600">\u2014</span>`;
+  }
+  return `<button type="button" data-action="copy-uid" data-uid="${user.uid}" title="Clicca per copiare l'UID"
+            class="font-mono text-xs px-2 py-0.5 rounded-md border border-slate-700 bg-slate-950/60 text-slate-300 hover:bg-slate-800 hover:text-white transition">${user.uid}</button>`;
+}
+
 function statusBadge(user) {
   if (user.suspended) {
     return `<span class="badge-pill bg-rose-500/15 text-rose-300 border border-rose-500/30">🚫 Sospeso</span>`;
@@ -64,6 +72,7 @@ async function loadUsers() {
       <td class="px-5 py-3">
         <a href="/permissions/${encodeURIComponent(u.username)}" class="font-medium text-indigo-400 hover:text-indigo-300">${escapeHtml(u.username)}</a>
       </td>
+      <td class="px-5 py-3">${uidCell(u)}</td>
       <td class="px-5 py-3">${statusBadge(u)}</td>
       <td class="px-5 py-3 text-slate-400">${formatExpiry(u.expiry_date)}</td>
       <td class="px-5 py-3">
@@ -170,6 +179,17 @@ document.getElementById("users-tbody").addEventListener("click", async (e) => {
   if (!btn) return;
   const action = btn.dataset.action;
   const username = btn.dataset.username;
+
+  if (action === "copy-uid") {
+    const uid = btn.dataset.uid;
+    try {
+      await navigator.clipboard.writeText(uid);
+      toast(`UID ${uid} copiato negli appunti.`, "success");
+    } catch (_) {
+      toast(`UID: ${uid}`, "info");
+    }
+    return;
+  }
 
   if (action === "toggle-suspend") {
     const suspended = btn.dataset.suspended === "1" || btn.dataset.suspended === "true";

@@ -206,6 +206,7 @@ def api_list_users(admin: str = Depends(require_admin_api)):
     now = datetime.now().strftime("%Y-%m-%dT%H:%M")
     for r in rows:
         r["expired"] = bool(r["expiry_date"] and r["expiry_date"] <= now)
+        r["uid"] = samba_manager.get_uid(r["username"])
     return {"users": rows}
 
 

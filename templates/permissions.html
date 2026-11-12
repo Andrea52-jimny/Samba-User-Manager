@@ -3,76 +3,126 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Samba Manager — Permessi di {{ username }}</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
-<link rel="stylesheet" href="/static/css/style.css">
+<title>Permessi {{ username }} | Samba Access Manager</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/css/custom.css">
 </head>
-<body class="sm-body min-h-screen" data-username="{{ username }}">
+<body class="min-h-screen bg-slate-950 text-slate-100">
 
-  <header class="sm-header flex items-center justify-between px-6 py-4">
-    <div class="flex items-center gap-3">
-      <a href="/" class="sm-btn-ghost text-xs">← Dashboard</a>
-      <div>
-        <h1 class="text-base font-semibold sm-text-primary leading-none">
-          Permessi — <span class="sm-code">{{ username }}</span>
-        </h1>
-        <p class="text-xs sm-text-muted leading-none mt-1">Albero letto in tempo reale da /mnt/dati</p>
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+
+  <header class="border-b border-slate-800 bg-slate-900/60 backdrop-blur sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <a href="/dashboard" class="w-9 h-9 rounded-xl border border-slate-700 flex items-center justify-center hover:bg-slate-800 transition">←</a>
+        <div>
+          <h1 class="text-sm font-semibold text-white leading-none">Permessi granulari</h1>
+          <p class="text-[11px] text-slate-500 leading-none mt-1">Utente: <span class="text-indigo-400">{{ username }}</span></p>
+        </div>
       </div>
-    </div>
-    <div class="flex items-center gap-4">
-      <span class="text-xs sm-text-muted">{{ admin }}</span>
-      <button id="logout-btn" class="sm-btn-ghost text-xs">Esci</button>
+      <button onclick="logout()" class="text-xs px-3 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 transition">Esci</button>
     </div>
   </header>
 
-  <main class="max-w-4xl mx-auto px-6 py-8">
+  <main class="max-w-7xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
 
-    <div class="sm-card p-4 mb-5 flex items-center justify-between">
-      <div>
-        <p class="text-sm font-medium sm-text-primary">Applica ricorsivamente alle sottocartelle</p>
-        <p class="text-xs sm-text-muted mt-0.5">
-          Assegnando un permesso su una cartella, questo si eredita da tutte le sottocartelle
-          esistenti e future, a meno di una modifica esplicita più specifica.
+    <!-- Albero cartelle -->
+    <section class="lg:col-span-3 bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+      <div class="flex items-center justify-between mb-2">
+        <h2 class="text-sm font-semibold text-white">📁 Struttura cartelle (scansione dal vivo)</h2>
+        <button id="refresh-tree-btn" title="Ricarica dal disco" class="text-xs px-2.5 py-1 rounded-lg border border-slate-700 hover:bg-slate-800">🔄 Aggiorna</button>
+      </div>
+      <div class="flex items-center justify-between mb-4 gap-2 flex-wrap">
+        <p class="text-[11px] text-slate-500">
+          Spunta le caselle per selezionare piu' cartelle insieme (l'azione si applichera' a tutte).
+          <span id="multi-select-count" class="hidden text-indigo-400 font-semibold"></span>
         </p>
+        <div class="flex gap-2">
+          <button id="select-children-btn" disabled title="Seleziona tutte le sottocartelle della cartella attiva"
+                  class="text-[11px] px-2.5 py-1 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-40 text-slate-300">
+            ☑ Seleziona sottocartelle
+          </button>
+          <button id="clear-selection-btn" disabled
+                  class="text-[11px] px-2.5 py-1 rounded-lg border border-slate-700 hover:bg-slate-800 disabled:opacity-40 text-slate-300">
+            ✕ Deseleziona tutto
+          </button>
+        </div>
       </div>
-      <label class="sm-switch shrink-0 ml-4">
-        <input type="checkbox" id="recursive-toggle" checked>
-        <span class="sm-switch-track"></span>
-      </label>
-    </div>
+      <div id="tree-root" class="text-sm max-h-[65vh] overflow-y-auto scrollbar-thin pr-1"></div>
+    </section>
 
-    <div class="sm-card p-2">
-      <div class="grid grid-cols-[1fr,auto,auto,auto] gap-x-4 px-3 py-2 text-xs font-semibold sm-text-muted uppercase tracking-wide">
-        <div>Cartella</div>
-        <div class="w-8 text-center">Lettura</div>
-        <div class="w-8 text-center">Modifica</div>
-        <div class="w-8 text-center">Elimina</div>
+    <!-- Pannello permessi -->
+    <section class="lg:col-span-2 space-y-6">
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 sticky top-20">
+        <h2 class="text-sm font-semibold text-white mb-1">Permessi selezionati</h2>
+        <p id="selected-path" class="text-xs text-indigo-400 mb-4 break-all">Nessuna cartella selezionata</p>
+        <p id="inherited-note" class="hidden text-xs text-amber-400 mb-4"></p>
+
+        <label class="flex items-center justify-between gap-3 bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 cursor-pointer mb-3">
+          <span class="text-xs font-semibold">☑ Seleziona tutto</span>
+          <input type="checkbox" id="perm-select-all" class="w-4 h-4 rounded border-slate-600">
+        </label>
+
+        <div class="space-y-3 mb-2">
+          <label class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 cursor-pointer">
+            <span class="text-sm">📖 Lettura (Read)</span>
+            <input type="checkbox" id="perm-read" class="w-4 h-4 rounded border-slate-600">
+          </label>
+          <label class="flex items-center justify-between gap-3 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2.5 cursor-pointer">
+            <span class="text-sm">✏️ Modifica (scrittura + eliminazione)</span>
+            <input type="checkbox" id="perm-write" class="w-4 h-4 rounded border-slate-600">
+          </label>
+          <!-- 'Eliminazione' non e' un permesso POSIX separabile da 'Modifica': su Linux/Samba
+               la possibilita' di cancellare un file dipende SOLO dal bit di scrittura della
+               cartella che lo contiene, mai da un bit sul singolo file. Chi puo' scrivere puo'
+               sempre anche cancellare: per questo il controllo e' unico e non un'illusione di
+               separazione che il filesystem non applicherebbe comunque. Il checkbox resta nel
+               DOM (nascosto) solo per compatibilita' con l'API, sempre sincronizzato con "Modifica". -->
+          <input type="checkbox" id="perm-delete" class="hidden">
+        </div>
+        <p class="text-[11px] text-slate-500 mb-5 leading-relaxed">
+          "Modifica" e "Eliminazione" sono un unico permesso: su Linux/Samba chi puo' scrivere in una cartella
+          puo' sempre anche cancellare i file al suo interno (regola del filesystem, non modificabile via ACL).
+        </p>
+
+        <div class="grid grid-cols-2 gap-2">
+          <button id="apply-recursive-btn" disabled
+                  class="rounded-lg py-2 text-xs font-semibold bg-indigo-500 hover:bg-indigo-400 disabled:opacity-40 disabled:hover:bg-indigo-500 text-white">
+            Applica (ricorsivo)
+          </button>
+          <button id="apply-single-btn" disabled
+                  class="rounded-lg py-2 text-xs font-semibold border border-slate-700 hover:bg-slate-800 disabled:opacity-40 text-white">
+            Applica (solo qui)
+          </button>
+        </div>
+        <p class="text-[11px] text-slate-500 mt-3 leading-relaxed">
+          "Ricorsivo" applica il permesso alla cartella selezionata e a tutte le sue sottocartelle, e imposta l'ereditarieta' per i contenuti futuri.
+          Un permesso impostato su una sottocartella specifica sovrascrive quanto ereditato dal genitore. Togliere tutte le spuncte e applicare
+          blocca esplicitamente l'accesso qui (non equivale a "nessuna assegnazione").
+        </p>
+        <button id="reset-inherit-btn" disabled
+                class="w-full mt-3 rounded-lg py-2 text-[11px] font-semibold border border-slate-700 hover:bg-slate-800 disabled:opacity-40 text-slate-300">
+          ↩ Ripristina ereditarieta' (rimuovi assegnazione qui)
+        </button>
       </div>
-      <ul id="tree-root" class="sm-tree"></ul>
-    </div>
 
-    <p class="text-xs sm-text-muted mt-4">
-      Nota: su Linux l'eliminazione di un file dipende dal permesso di scrittura sulla cartella
-      che lo contiene. Per un comportamento pienamente coerente, abilita "Elimina" insieme a "Modifica".
-    </p>
+      <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-white">📋 Assegnazioni esplicite</h2>
+          <button id="revoke-all-btn" title="Toglie tutte le assegnazioni esplicite dell'utente su ogni cartella e sottocartella"
+                  class="text-[11px] px-2.5 py-1 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white transition">
+            🛑 Revoca tutto
+          </button>
+        </div>
+        <div id="assignments-list" class="text-xs space-y-1.5 max-h-56 overflow-y-auto scrollbar-thin"></div>
+      </div>
+    </section>
   </main>
 
-  <template id="tree-node-template">
-    <li class="sm-tree-node">
-      <div class="sm-tree-row grid grid-cols-[1fr,auto,auto,auto] gap-x-4 items-center px-3 py-2 rounded">
-        <div class="flex items-center gap-2 min-w-0">
-          <button class="sm-tree-toggle" type="button">▸</button>
-          <span class="sm-tree-icon">📁</span>
-          <span class="sm-tree-name truncate"></span>
-        </div>
-        <div class="w-8 flex justify-center"><input type="checkbox" class="sm-checkbox perm-read"></div>
-        <div class="w-8 flex justify-center"><input type="checkbox" class="sm-checkbox perm-write"></div>
-        <div class="w-8 flex justify-center"><input type="checkbox" class="sm-checkbox perm-delete"></div>
-      </div>
-      <ul class="sm-tree-children hidden"></ul>
-    </li>
-  </template>
-
+  <script src="/static/js/common.js"></script>
+  <script>
+    const TARGET_USERNAME = {{ username|tojson }};
+  </script>
   <script src="/static/js/permissions.js"></script>
 </body>
 </html>

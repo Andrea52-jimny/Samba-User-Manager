@@ -1,53 +1,55 @@
 #!/usr/bin/env python3
 """
-Script di inizializzazione, da eseguire UNA VOLTA dopo l'installazione:
+Script di inizializzazione del database SQLite.
+Da eseguire UNA SOLA VOLTA alla prima installazione (o automaticamente
+dall'entrypoint Docker al primo avvio se il DB non esiste ancora):
 
-    cd /opt/samba-manager
-    source venv/bin/activate
-    python init_db.py
+    python3 init_db.py     # dalla cartella radice del progetto (sibling di app/)
 
-Crea lo schema SQLite (se non esiste già) e chiede in modo interattivo
-username/password del primo amministratore, salvando solo l'hash Bcrypt
-(mai la password in chiaro). Rieseguibile in sicurezza in seguito per
-aggiungere un ulteriore amministratore.
+Crea le tabelle e un amministratore di bootstrap. La password di default
+puo' essere personalizzata tramite le variabili d'ambiente ADMIN_USERNAME
+e ADMIN_PASSWORD; se non viene eseguito, il login iniziale sara':
+
+    utente: admin
+    password: ChangeMe123!
+
+L'app RICORDA di cambiare questa password al primo accesso.
 """
-import getpass
 import sys
 
+import bcrypt
+
+from app.config import DEFAULT_ADMIN_USERNAME, DEFAULT_ADMIN_PASSWORD
 from app.database import init_db, db_cursor
-from app.security import hash_password
 
 
-def main():
-    init_db()
-    print("Schema SQLite pronto.\n")
-
-    username = input("Username del nuovo amministratore: ").strip()
-    if not username:
-        print("Username vuoto, uscita.")
-        sys.exit(1)
-
-    password = getpass.getpass("Password: ")
-    password_confirm = getpass.getpass("Conferma password: ")
-    if password != password_confirm:
-        print("Le due password non coincidono, uscita.")
-        sys.exit(1)
-    if len(password) < 8:
-        print("La password deve avere almeno 8 caratteri.")
-        sys.exit(1)
-
+def create_bootstrap_admin():
     with db_cursor() as cur:
-        cur.execute("SELECT 1 FROM admin_users WHERE username = ?", (username,))
-        if cur.fetchone():
-            print(f"L'amministratore '{username}' esiste già.")
-            sys.exit(1)
+        cur.execute("SELECT COUNT(*) AS n FROM admins")
+        count = cur.fetchone()["n"]
+    if count > 0:
+        print("Un amministratore esiste gia'. Nessuna azione necessaria.")
+        return
+
+    password_hash = bcrypt.hashpw(
+        DEFAULT_ADMIN_PASSWORD.encode("utf-8"), bcrypt.gensalt()
+    ).decode("utf-8")
+
+    with db_cursor(commit=True) as cur:
         cur.execute(
-            "INSERT INTO admin_users (username, password_hash) VALUES (?, ?)",
-            (username, hash_password(password)),
+            "INSERT INTO admins (username, password_hash) VALUES (?, ?)",
+            (DEFAULT_ADMIN_USERNAME, password_hash),
         )
 
-    print(f"\nAmministratore '{username}' creato correttamente.")
+    print("=" * 60)
+    print("Amministratore di bootstrap creato:")
+    print(f"  username: {DEFAULT_ADMIN_USERNAME}")
+    print(f"  password: {DEFAULT_ADMIN_PASSWORD}")
+    print("CAMBIARE QUESTA PASSWORD AL PRIMO ACCESSO.")
+    print("=" * 60)
 
 
 if __name__ == "__main__":
-    main()
+    init_db()
+    create_bootstrap_admin()
+    sys.exit(0)

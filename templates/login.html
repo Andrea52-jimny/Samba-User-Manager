@@ -3,34 +3,70 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Samba Manager — Accesso</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css"></script>
-<link rel="stylesheet" href="/static/css/style.css">
+<title>Accesso | Samba Access Manager</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="/static/css/custom.css">
 </head>
-<body class="sm-body flex items-center justify-center min-h-screen">
+<body class="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center relative overflow-hidden">
+
+  <div class="absolute inset-0 -z-10 opacity-40"
+       style="background: radial-gradient(circle at 20% 20%, rgba(99,102,241,0.25), transparent 45%), radial-gradient(circle at 80% 80%, rgba(16,185,129,0.18), transparent 45%);">
+  </div>
+
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 w-80"></div>
+
   <div class="w-full max-w-sm">
     <div class="text-center mb-8">
-      <div class="sm-logo mx-auto mb-4">⌁</div>
-      <h1 class="text-xl font-semibold sm-text-primary tracking-tight">Samba Manager</h1>
-      <p class="text-sm sm-text-muted mt-1">Pannello amministrazione condivisione /mnt/dati</p>
+      <div class="mx-auto w-14 h-14 rounded-2xl bg-indigo-500/15 border border-indigo-400/30 flex items-center justify-center text-2xl mb-3">🗂️</div>
+      <h1 class="text-xl font-semibold tracking-tight text-white">Samba Access Manager</h1>
+      <p class="text-sm text-slate-400 mt-1">Pannello amministratore &middot; accesso riservato</p>
     </div>
 
-    <div class="sm-card p-6">
-      <form id="login-form" class="space-y-4">
-        <div>
-          <label class="sm-label">Username amministratore</label>
-          <input id="username" type="text" autocomplete="username" required class="sm-input" placeholder="admin">
-        </div>
-        <div>
-          <label class="sm-label">Password</label>
-          <input id="password" type="password" autocomplete="current-password" required class="sm-input" placeholder="••••••••">
-        </div>
-        <p id="error-box" class="text-sm text-rose-400 hidden"></p>
-        <button type="submit" class="sm-btn-primary w-full">Accedi</button>
-      </form>
-    </div>
-    <p class="text-xs sm-text-muted text-center mt-6">Sessione valida 12 ore · Nessun dato analitico esterno</p>
+    <form id="login-form" class="bg-slate-900/70 border border-slate-800 rounded-2xl p-6 shadow-2xl shadow-black/40 backdrop-blur">
+      <div class="mb-4">
+        <label class="block text-xs font-medium text-slate-400 mb-1.5" for="username">Username</label>
+        <input id="username" name="username" type="text" autocomplete="username" required
+               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+      </div>
+      <div class="mb-5">
+        <label class="block text-xs font-medium text-slate-400 mb-1.5" for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required
+               class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+      </div>
+      <button type="submit" id="login-btn"
+              class="w-full bg-indigo-500 hover:bg-indigo-400 transition rounded-lg py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20">
+        Accedi
+      </button>
+      <p id="login-error" class="text-rose-400 text-xs mt-3 hidden"></p>
+    </form>
+
+    <p class="text-center text-xs text-slate-600 mt-6">LXC Container &middot; Samba Access Manager</p>
   </div>
-  <script src="/static/js/login.js"></script>
+
+  <script src="/static/js/common.js"></script>
+  <script>
+    const form = document.getElementById("login-form");
+    const errorEl = document.getElementById("login-error");
+    const btn = document.getElementById("login-btn");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorEl.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "Accesso in corso...";
+      try {
+        await apiPost("/api/login", {
+          username: document.getElementById("username").value.trim(),
+          password: document.getElementById("password").value,
+        });
+        window.location.href = "/dashboard";
+      } catch (err) {
+        errorEl.textContent = err.message || "Errore di accesso.";
+        errorEl.classList.remove("hidden");
+        btn.disabled = false;
+        btn.textContent = "Accedi";
+      }
+    });
+  </script>
 </body>
 </html>

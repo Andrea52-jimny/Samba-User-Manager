@@ -1,3 +1,11 @@
+# Default smb.conf used to seed /etc/samba/smb.conf on the first container
+# start. Once seeded, this file is never touched again: edit the live copy in
+# ./state/samba-etc/smb.conf, or use the web UI.
+#
+# The share below is named [Dati] ("Data" in Italian) for historical reasons.
+# If you rename it, set SMB_SHARE_SECTION to the new name as well, otherwise
+# the app will not find the section it is supposed to manage.
+
 [global]
    log file = /var/log/samba/log.%m
    logging = file
@@ -14,7 +22,7 @@
    idmap config * : backend = tdb
 
 [Dati]
-   comment = Archivio NAS
+   comment = NAS storage
    create mask = 0660
    directory mask = 0770
    path = /mnt/dati

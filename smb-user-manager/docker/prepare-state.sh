@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Da eseguire prima del primo "docker compose up" (o dopo un cambiamento di
-# struttura dei volumi), nella cartella che contiene docker-compose.yml.
-# Crea semplicemente le directory persistenti se non esistono ancora.
+# Run once before the first "docker compose up" (or after changing the volume
+# layout), from the directory containing docker-compose.yml. It only creates
+# the persistent directories if they do not exist yet.
 set -euo pipefail
+
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 mkdir -p state/app-data state/samba-etc state/samba-private state/samba-log state/users
 
-echo "Struttura ./state/ pronta. Ora puoi eseguire: docker compose up -d --build"
+echo "./state/ is ready. You can now run: docker compose up -d --build"

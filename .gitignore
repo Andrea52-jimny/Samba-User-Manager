@@ -1,0 +1,35 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- Application runtime state ---
+# SQLite database, Samba state and persisted /etc files live here and must
+# never be committed: they contain real usernames and password hashes.
+data/
+state/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# --- Local configuration & secrets ---
+.env
+*.local
+smb.conf.bak-*
+*.bak-*
+
+# --- Editors / OS ---
+.idea/
+.vscode/
+*.swp
+*~
+.~lock.*#
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log

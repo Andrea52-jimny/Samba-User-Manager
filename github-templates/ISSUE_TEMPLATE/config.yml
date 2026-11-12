@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or setup help
+    url: https://github.com/Andrea52-jimny/HomeLab-smbUserManager/discussions
+    about: Ask about your deployment, ZFS or LXC setup here rather than opening an issue.
+  - name: Security vulnerability
+    url: https://github.com/Andrea52-jimny/HomeLab-smbUserManager/security/advisories/new
+    about: Report security problems privately, never in a public issue.

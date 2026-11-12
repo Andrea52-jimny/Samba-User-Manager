@@ -1,0 +1,77 @@
+name: Bug report
+description: Something does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please redact real usernames, hostnames and paths you would rather not
+        publish. **Never paste the contents of `state/`** — it contains
+        password hashes.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a user named ...
+        2. Grant Read on folder ...
+        3. Connect from a Windows client ...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment method
+      options:
+        - Docker Compose
+        - Bare metal / LXC (install.sh + systemd)
+        - Other (describe below)
+    validations:
+      required: true
+
+  - type: input
+    id: host
+    attributes:
+      label: Host environment
+      description: OS and whether Samba runs in LXC, a VM or bare metal.
+      placeholder: "Proxmox 8.2, unprivileged LXC, Debian 12"
+    validations:
+      required: true
+
+  - type: input
+    id: filesystem
+    attributes:
+      label: Filesystem behind the share
+      description: For ZFS, paste `zfs get acltype,xattr <pool>/<dataset>`.
+      placeholder: "ZFS, acltype=posixacl, xattr=sa"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        `docker compose logs --tail=100` or
+        `journalctl -u smb-user-manager -n 100 --no-pager`
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: "v1.0.0, or the short commit hash"
+    validations:
+      required: true

@@ -1,17 +1,22 @@
 [Unit]
-Description=Samba User & Permission Manager (FastAPI)
+Description=SMB User Manager (FastAPI)
+Documentation=https://github.com/Andrea52-jimny/HomeLab-smbUserManager
 After=network.target smbd.service
 Wants=smbd.service
 
 [Service]
 Type=simple
-# L'app deve girare come root: esegue useradd/deluser/smbpasswd/setfacl/chage
-# e modifica /etc/samba/smb.conf. Il container LXC fornisce l'isolamento.
+# The service must run as root: it executes useradd/deluser/smbpasswd/
+# setfacl/chage and edits /etc/samba/smb.conf. Isolation is provided by the
+# LXC container or VM it runs in, not by this unit.
 User=root
 WorkingDirectory=__APP_DIR__
 Environment=SMB_ROOT_PATH=/mnt/dati
 Environment=SMB_CONF_PATH=/etc/samba/smb.conf
+Environment=SMB_SHARE_SECTION=Dati
 Environment=SAMBA_GROUP=smbgroup
+# Uncomment when serving the UI over HTTPS through a reverse proxy:
+# Environment=SESSION_COOKIE_SECURE=true
 ExecStart=__APP_DIR__/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
 Restart=on-failure
 RestartSec=3

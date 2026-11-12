@@ -1,57 +1,83 @@
-services:
-  samba-manager:
-    build: .
-    image: samba-access-manager:latest
-    container_name: samba-manager
-    restart: unless-stopped
-    # Necessario: l'app esegue useradd/smbpasswd/setfacl/chage a livello di
-    # sistema e smbd deve poter aprire socket privilegiati e gestire ACL.
-    # In alternativa a 'privileged: true' si puo' provare con un set mirato
-    # di capabilities (cap_add), ma va testato caso per caso.
-    privileged: true
-    ports:
-      - "80:8000"   # Web UI / API
-      - "445:445"     # SMB
-      # "139:139"     # NetBIOS: DISATTIVATO di default, va quasi sempre in
-      # conflitto con nmbd nativo ancora in ascolto sull'host/container LXC.
-      # Riattivalo solo se ti servono client Windows molto vecchi (XP/2003),
-      # e solo DOPO aver fermato il servizio nativo che occupa la porta 139
-      # (vedi comando diagnostico nel README).
-    volumes:
-      # --- Dati NAS reali: bind mount dal dataset ZFS dell'host ---
-      # Deve essere lo stesso path che poi appare come "path" in smb.conf.
-      - /mnt/dati:/mnt/dati
+# SMB User Manager - single-container deployment.
+#
+# Samba (smbd) and the web application run in the SAME container on purpose:
+# the app creates real Linux users with useradd/smbpasswd, and smbd has to see
+# them in the same system namespace. See docs/ARCHITECTURE.md.
+#
+# Every value below can be overridden from a `.env` file placed next to this
+# one (copy `.env.example` to `.env`). The defaults match the image defaults,
+# so `docker compose up -d --build` works with no `.env` at all.
 
-      # --- Stato persistente dell'app (DB SQLite: utenti, sessioni, ACL) ---
+services:
+  smb-user-manager:
+    build: .
+    image: smb-user-manager:latest
+    container_name: smb-user-manager
+    restart: unless-stopped
+
+    # The app runs useradd / smbpasswd / setfacl / chage as root, and smbd
+    # needs to manage ACLs and bind privileged sockets. A targeted set of
+    # capabilities (CAP_CHOWN, CAP_FOWNER, CAP_DAC_READ_SEARCH, CAP_SYS_ADMIN)
+    # may work instead, but has to be validated case by case; privileged is
+    # the simple, reliable choice for a homelab.
+    privileged: true
+
+    ports:
+      - "${WEB_PORT:-8000}:8000"   # Web UI and API
+      - "${SMB_PORT:-445}:445"     # SMB over TCP
+      # NetBIOS (port 139) is intentionally NOT published. It almost always
+      # collides with an nmbd still listening on the host or LXC container,
+      # and `docker compose up` then fails with "address already in use".
+      # Modern Windows, macOS and Linux clients use 445 exclusively; enable
+      # this only for very old clients (XP / Server 2003), and only after
+      # freeing the port (see docs/TROUBLESHOOTING.md).
+      # - "139:139"
+
+    volumes:
+      # --- Real data: bind mount of the host dataset -----------------------
+      # Must be the same path that appears as `path =` in smb.conf, and must
+      # live on a filesystem with POSIX ACL support enabled.
+      - ${HOST_DATA_PATH:-/mnt/dati}:${SMB_ROOT_PATH:-/mnt/dati}
+
+      # --- Application state: SQLite database ------------------------------
       - ./state/app-data:/app/data
 
-      # --- Configurazione e database utenti Samba (persistente) ---
+      # --- Samba configuration and user database ---------------------------
       - ./state/samba-etc:/etc/samba
       - ./state/samba-private:/var/lib/samba
       - ./state/samba-log:/var/log/samba
 
-      # --- Utenti/gruppi Linux di sistema (persistenti tra ricreazioni) ---
-      # UNA directory (non i singoli file: /etc/passwd bind-montato come file
-      # sarebbe un mountpoint e romperebbe useradd/groupadd/passwd, che
-      # scrivono con schema "tmpfile + rename()"). L'entrypoint copia questi
-      # file DENTRO /etc a ogni avvio; l'app li ricopia FUORI dopo ogni
-      # modifica (vedi app/samba_manager.py).
+      # --- Persistent Linux users and groups -------------------------------
+      # A DIRECTORY is mounted here, not the individual /etc files. Bind
+      # mounting /etc/passwd as a file would make it a mountpoint, and
+      # useradd/groupadd/passwd write with a "temp file + rename()" scheme:
+      # rename() cannot replace a mountpoint, so they would fail. The
+      # entrypoint copies these files INTO /etc at every start, and the app
+      # copies them back OUT after every change (see app/samba_manager.py).
       - ./state/users:/persist/users
+
     environment:
-      # Fuso orario del container: DEVE combaciare con quello di chi
-      # amministra (altrimenti le scadenze account impostate dal browser,
-      # che sono orari "locali" senza timezone, vengono confrontate contro
-      # l'orologio di sistema del container con uno scarto sistematico -
-      # es. UTC vs CEST = 2 ore di differenza). Cambia se necessario, poi
-      # basta 'docker compose up -d' (non serve rebuild).
-      - TZ=Europe/Rome
-      - SMB_ROOT_PATH=/mnt/dati
-      - SMB_CONF_PATH=/etc/samba/smb.conf
-      - SAMBA_GROUP=smbgroup
-      - SMB_DB_PATH=/app/data/smb_manager.db
-      - PERSIST_USERS_DIR=/persist/users
-      # Amministratore di bootstrap (solo al primissimo avvio, quando il DB
-      # non esiste ancora). CAMBIARE la password dalla UI al primo accesso.
-      - ADMIN_USERNAME=admin
-      - ADMIN_PASSWORD=ChangeMe123!
-      - SESSION_COOKIE_SECURE=false
+      # Must match the administrator's timezone: account expiry times are
+      # entered in the browser as local wall-clock time with no offset, so a
+      # container on UTC would suspend accounts with a systematic skew.
+      TZ: ${TZ:-Europe/Rome}
+
+      # Storage and Samba
+      SMB_ROOT_PATH: ${SMB_ROOT_PATH:-/mnt/dati}
+      SMB_CONF_PATH: ${SMB_CONF_PATH:-/etc/samba/smb.conf}
+      SMB_SHARE_SECTION: ${SMB_SHARE_SECTION:-Dati}
+      SAMBA_GROUP: ${SAMBA_GROUP:-smbgroup}
+
+      # Application state
+      SMB_DB_PATH: ${SMB_DB_PATH:-/app/data/smb_manager.db}
+      PERSIST_USERS_DIR: ${PERSIST_USERS_DIR:-/persist/users}
+
+      # Sessions. Set SESSION_COOKIE_SECURE=true only behind an HTTPS proxy.
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
+      EXPIRY_CHECK_INTERVAL_SECONDS: ${EXPIRY_CHECK_INTERVAL_SECONDS:-60}
+
+      # Bootstrap administrator. Used only on the first start, when the
+      # database does not exist yet. CHANGE THE PASSWORD FROM THE UI.
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}

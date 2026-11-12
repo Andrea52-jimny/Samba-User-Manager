@@ -1,16 +1,30 @@
-venv/
+# Runtime state: never copy into the image.
+state/
 data/
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
+.env
+
+# Python artefacts
+venv/
+.venv/
 __pycache__/
 *.pyc
+
+# Repository metadata and docs
 .git/
+.github/
 .gitignore
-state/
-*.bak-*
-README.md
+docs/
+*.md
+LICENSE
+.env.example
+
+# Host-install path: not used by the image
 install.sh
-update.sh
-cleanup.sh
-reset-repo-from-prod.sh
 smb-user-manager.service
+
+# Backups
+*.bak-*

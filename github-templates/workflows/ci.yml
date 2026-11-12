@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    name: Python syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Byte-compile sources
+        run: python -m compileall -q app init_db.py
+
+      - name: Import the FastAPI application
+        # Exercises the import graph and the route definitions without
+        # touching the system: the app only runs privileged commands when a
+        # request comes in.
+        env:
+          SMB_ROOT_PATH: /tmp/smb-ci-root
+          SMB_DB_PATH: /tmp/smb-ci-root/ci.db
+        run: |
+          mkdir -p /tmp/smb-ci-root
+          python -c "from app.main import app; print(f'{len(app.routes)} routes registered')"
+
+  shell:
+    name: Shell scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        run: shellcheck -S warning install.sh docker/entrypoint.sh docker/prepare-state.sh
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: smb-user-manager:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Validate the default smb.conf
+        run: |
+          docker run --rm --entrypoint testparm smb-user-manager:ci \
+            -s /opt/defaults/smb.conf.default > testparm.out 2>&1 || true
+          cat testparm.out
+          grep -q "Loaded services file OK" testparm.out
+
+      - name: Validate the compose file
+        run: docker compose config --quiet
